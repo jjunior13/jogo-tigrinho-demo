@@ -27,7 +27,8 @@ const SYMBOL_MAP: Record<SymbolId, SymbolConfig> = SYMBOLS.reduce(
   {} as Record<SymbolId, SymbolConfig>
 );
 
-const BET_OPTIONS = [10, 20, 50, 100, 200];
+const BET_STEPS = [5, 10, 20, 50, 100, 200, 500];
+const AUTO_OPTIONS = [5, 10, 25, 50];
 
 const PAYLINES: { name: string; cells: [number, number, number] }[] = [
   { name: "Linha Superior", cells: [0, 1, 2] },
@@ -61,7 +62,7 @@ function evaluateGrid(grid: SymbolId[], bet: number) {
     return {
       winAmount: bet * fullMultiplier,
       winningCells,
-      matchedLines: [`GRADE COMPLETA (${SYMBOL_MAP[firstNonWild].name} ×${fullMultiplier})`],
+      matchedLines: [`GRADE COMPLETA 10× (${SYMBOL_MAP[firstNonWild].name} ×${fullMultiplier})`],
       isFullGridBonus: true,
     };
   }
@@ -96,41 +97,104 @@ function evaluateGrid(grid: SymbolId[], bet: number) {
   };
 }
 
+function createToneWavDataUri(freqHz: number, durationSec: number, volume = 0.35): string {
+  const sampleRate = 8000;
+  const numSamples = Math.max(1, Math.floor(sampleRate * durationSec));
+  const buffer = new ArrayBuffer(44 + numSamples);
+  const view = new DataView(buffer);
+
+  const writeStr = (offset: number, str: string) => {
+    for (let i = 0; i < str.length; i++) {
+      view.setUint8(offset + i, str.charCodeAt(i));
+    }
+  };
+
+  writeStr(0, "RIFF");
+  view.setUint32(4, 36 + numSamples, true);
+  writeStr(8, "WAVE");
+  writeStr(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate, true);
+  view.setUint16(32, 1, true);
+  view.setUint16(34, 8, true);
+  writeStr(36, "data");
+  view.setUint32(40, numSamples, true);
+
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / sampleRate;
+    const env = 1 - i / numSamples;
+    const sample = Math.sin(2 * Math.PI * freqHz * t) * env * volume;
+    const byte = Math.max(0, Math.min(255, Math.floor(128 + sample * 127)));
+    view.setUint8(44 + i, byte);
+  }
+
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return `data:audio/wav;base64,${btoa(binary)}`;
+}
+
 interface ReelColumnState {
-  symbols: SymbolId[];
+  strip: [SymbolId, SymbolId, SymbolId, SymbolId];
   spinning: boolean;
+  stepping: boolean;
   landed: boolean;
 }
 
 function createInitialColumns(): [ReelColumnState, ReelColumnState, ReelColumnState] {
   return [
-    { symbols: ["lantern", "orange", "ingot"], spinning: false, landed: false },
-    { symbols: ["tiger", "tiger", "tiger"], spinning: false, landed: false },
-    { symbols: ["envelope", "bag", "orange"], spinning: false, landed: false },
+    { strip: ["bag", "lantern", "orange", "ingot"], spinning: false, stepping: false, landed: false },
+    { strip: ["ingot", "tiger", "tiger", "tiger"], spinning: false, stepping: false, landed: false },
+    { strip: ["lantern", "envelope", "bag", "orange"], spinning: false, stepping: false, landed: false },
   ];
 }
 
 export default function FortuneTigerDemoPage() {
   const [balance, setBalance] = useState<number>(1000);
-  const [bet, setBet] = useState<number>(20);
+  const [betIndex, setBetIndex] = useState<number>(2); // 20
   const [columns, setColumns] = useState<[ReelColumnState, ReelColumnState, ReelColumnState]>(createInitialColumns);
   const [turbo, setTurbo] = useState<boolean>(false);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
+  const [autoSpinsLeft, setAutoSpinsLeft] = useState<number>(0);
+  const [showBetMenu, setShowBetMenu] = useState<boolean>(false);
   const [lastWin, setLastWin] = useState<number>(0);
   const [winningCells, setWinningCells] = useState<Set<number>>(new Set());
-  const [statusBanner, setStatusBanner] = useState<string>("Toque em GIRAR para testar sua sorte");
+  const [statusBanner, setStatusBanner] = useState<string>("Ajuste a aposta e toque em GIRAR");
   const [isBonusFlash, setIsBonusFlash] = useState<boolean>(false);
+
+  const bet = BET_STEPS[betIndex];
+  const isSpinning = columns[0].spinning || columns[1].spinning || columns[2].spinning;
 
   const intervalsRef = useRef<number[]>([]);
   const timeoutsRef = useRef<number[]>([]);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const soundEnabledRef = useRef<boolean>(soundEnabled);
+  const autoSpinsRef = useRef<number>(autoSpinsLeft);
+  const balanceRef = useRef<number>(balance);
+  const betRef = useRef<number>(bet);
+  const turboRef = useRef<boolean>(turbo);
+
+  const tickAudioRef = useRef<HTMLAudioElement | null>(null);
+  const stopAudioRef = useRef<HTMLAudioElement | null>(null);
+  const winAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => { soundEnabledRef.current = soundEnabled; }, [soundEnabled]);
+  useEffect(() => { autoSpinsRef.current = autoSpinsLeft; }, [autoSpinsLeft]);
+  useEffect(() => { balanceRef.current = balance; }, [balance]);
+  useEffect(() => { betRef.current = bet; }, [bet]);
+  useEffect(() => { turboRef.current = turbo; }, [turbo]);
 
   useEffect(() => {
-    soundEnabledRef.current = soundEnabled;
-  }, [soundEnabled]);
-
-  const isSpinning = columns[0].spinning || columns[1].spinning || columns[2].spinning;
+    if (typeof window === "undefined") return;
+    tickAudioRef.current = new Audio(createToneWavDataUri(340, 0.03, 0.28));
+    stopAudioRef.current = new Audio(createToneWavDataUri(160, 0.08, 0.42));
+    winAudioRef.current = new Audio(createToneWavDataUri(660, 0.22, 0.45));
+  }, []);
 
   const unlockAudio = useCallback(async () => {
     if (!soundEnabledRef.current || typeof window === "undefined") return null;
@@ -146,82 +210,88 @@ export default function FortuneTigerDemoPage() {
       try {
         await audioCtxRef.current.resume();
       } catch {
-        // Ignora bloqueio temporário do navegador
+        // Ignora bloqueio temporário
       }
     }
     return audioCtxRef.current;
   }, []);
 
+  const playFallbackAudio = (el: HTMLAudioElement | null) => {
+    if (!soundEnabledRef.current || !el) return;
+    try {
+      el.currentTime = 0;
+      const promise = el.play();
+      if (promise && typeof promise.catch === "function") {
+        promise.catch(() => {});
+      }
+    } catch {
+      // Ignora erro
+    }
+  };
+
   const playReelTick = useCallback((colIndex: number) => {
     if (!soundEnabledRef.current) return;
     const ctx = audioCtxRef.current;
-    if (!ctx || ctx.state !== "running") return;
-
-    const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    osc.type = "triangle";
-    const startFreq = 280 + colIndex * 50 + Math.random() * 45;
-    osc.frequency.setValueAtTime(startFreq, now);
-    osc.frequency.exponentialRampToValueAtTime(105, now + 0.035);
-
-    gain.gain.setValueAtTime(0.12, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.038);
-
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-
-    osc.start(now);
-    osc.stop(now + 0.04);
+    if (ctx && ctx.state === "running") {
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(290 + colIndex * 45 + Math.random() * 40, now);
+      osc.frequency.exponentialRampToValueAtTime(110, now + 0.032);
+      gain.gain.setValueAtTime(0.14, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.035);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.036);
+    } else {
+      playFallbackAudio(tickAudioRef.current);
+    }
   }, []);
 
   const playReelStop = useCallback((colIndex: number) => {
     if (!soundEnabledRef.current) return;
     const ctx = audioCtxRef.current;
-    if (!ctx || ctx.state !== "running") return;
-
-    const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(190 + colIndex * 30, now);
-    osc.frequency.exponentialRampToValueAtTime(70, now + 0.09);
-
-    gain.gain.setValueAtTime(0.18, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.095);
-
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-
-    osc.start(now);
-    osc.stop(now + 0.1);
+    if (ctx && ctx.state === "running") {
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(185 + colIndex * 25, now);
+      osc.frequency.exponentialRampToValueAtTime(68, now + 0.085);
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.095);
+    } else {
+      playFallbackAudio(stopAudioRef.current);
+    }
   }, []);
 
   const playWinSound = useCallback((isBonus: boolean) => {
     if (!soundEnabledRef.current) return;
     const ctx = audioCtxRef.current;
-    if (!ctx || ctx.state !== "running") return;
-
-    const notes = isBonus ? [523.25, 659.25, 783.99, 1046.5] : [523.25, 659.25, 783.99];
-    notes.forEach((freq, idx) => {
-      const now = ctx.currentTime + idx * 0.095;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-
-      osc.type = "triangle";
-      osc.frequency.setValueAtTime(freq, now);
-
-      gain.gain.setValueAtTime(0.16, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-
-      osc.start(now);
-      osc.stop(now + 0.25);
-    });
+    if (ctx && ctx.state === "running") {
+      const notes = isBonus ? [523.25, 659.25, 783.99, 1046.5] : [523.25, 659.25, 783.99];
+      notes.forEach((freq, idx) => {
+        const now = ctx.currentTime + idx * 0.095;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "triangle";
+        osc.frequency.setValueAtTime(freq, now);
+        gain.gain.setValueAtTime(0.18, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.25);
+      });
+    } else {
+      playFallbackAudio(winAudioRef.current);
+    }
   }, []);
 
   const handleToggleSound = async () => {
@@ -238,12 +308,14 @@ export default function FortuneTigerDemoPage() {
         const gain = ctx.createGain();
         osc.type = "sine";
         osc.frequency.setValueAtTime(587.33, now);
-        gain.gain.setValueAtTime(0.12, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
         osc.connect(gain);
         gain.connect(ctx.destination);
         osc.start(now);
-        osc.stop(now + 0.13);
+        osc.stop(now + 0.15);
+      } else {
+        playFallbackAudio(winAudioRef.current);
       }
     }
   };
@@ -270,7 +342,7 @@ export default function FortuneTigerDemoPage() {
     [SymbolId, SymbolId, SymbolId]
   ] => {
     const grid: SymbolId[] = Array.from({ length: 9 }, () => pickWeightedSymbol());
-    const forceHit = Math.random() < 0.22;
+    const forceHit = Math.random() < 0.24;
 
     if (forceHit) {
       const chosenLine = PAYLINES[Math.floor(Math.random() * PAYLINES.length)];
@@ -286,91 +358,174 @@ export default function FortuneTigerDemoPage() {
     return [col0, col1, col2];
   };
 
-  const handleSpin = async () => {
-    if (isSpinning) return;
+  const startSingleSpin = useCallback(
+    async (isAutoStep = false) => {
+      const currentBet = betRef.current;
+      const currentBalance = balanceRef.current;
 
-    if (balance < bet) {
-      setStatusBanner("Saldo insuficiente! Recarregue ou diminua a aposta.");
+      if (currentBalance < currentBet) {
+        setAutoSpinsLeft(0);
+        autoSpinsRef.current = 0;
+        setStatusBanner("Saldo insuficiente! Recarregue ou reduza a aposta.");
+        return;
+      }
+
+      await unlockAudio();
+      clearTimers();
+      setShowBetMenu(false);
+      setLastWin(0);
+      setWinningCells(new Set());
+      setIsBonusFlash(false);
+
+      const nextBalance = currentBalance - currentBet;
+      balanceRef.current = nextBalance;
+      setBalance(nextBalance);
+      setStatusBanner(isAutoStep ? `Giros automáticos (${autoSpinsRef.current} restantes)...` : "Rolos descendo...");
+
+      const finalCols = generateOutcomeColumns();
+      const stepMs = turboRef.current ? 70 : 110;
+      const stopDelays = turboRef.current ? [420, 740, 1060] : [880, 1430, 1980];
+
+      setColumns((prev) => [
+        { ...prev[0], spinning: true, stepping: false, landed: false },
+        { ...prev[1], spinning: true, stepping: false, landed: false },
+        { ...prev[2], spinning: true, stepping: false, landed: false },
+      ]);
+
+      ([0, 1, 2] as const).forEach((colIdx) => {
+        const intervalId = window.setInterval(() => {
+          playReelTick(colIdx);
+
+          setColumns((prev) => {
+            const next = [...prev] as [ReelColumnState, ReelColumnState, ReelColumnState];
+            if (!next[colIdx].spinning) return prev;
+            next[colIdx] = { ...next[colIdx], stepping: true };
+            return next;
+          });
+
+          const settleId = window.setTimeout(() => {
+            setColumns((prev) => {
+              const next = [...prev] as [ReelColumnState, ReelColumnState, ReelColumnState];
+              if (!next[colIdx].spinning) return prev;
+              const incoming = pickWeightedSymbol();
+              const [, s0, s1] = next[colIdx].strip;
+              next[colIdx] = {
+                ...next[colIdx],
+                strip: [incoming, incoming, s0, s1],
+                stepping: false,
+              };
+              return next;
+            });
+          }, Math.max(35, stepMs - 25));
+
+          timeoutsRef.current.push(settleId);
+        }, stepMs);
+
+        intervalsRef.current.push(intervalId);
+
+        const timeoutId = window.setTimeout(() => {
+          window.clearInterval(intervalId);
+          playReelStop(colIdx);
+
+          setColumns((prev) => {
+            const next = [...prev] as [ReelColumnState, ReelColumnState, ReelColumnState];
+            const [f0, f1, f2] = finalCols[colIdx];
+            next[colIdx] = {
+              strip: [pickWeightedSymbol(), f0, f1, f2],
+              spinning: false,
+              stepping: false,
+              landed: true,
+            };
+
+            if (!next[0].spinning && !next[1].spinning && !next[2].spinning) {
+              const flatGrid: SymbolId[] = [
+                next[0].strip[1], next[1].strip[1], next[2].strip[1],
+                next[0].strip[2], next[1].strip[2], next[2].strip[2],
+                next[0].strip[3], next[1].strip[3], next[2].strip[3],
+              ];
+
+              const result = evaluateGrid(flatGrid, currentBet);
+              if (result.winAmount > 0) {
+                const updatedBal = balanceRef.current + result.winAmount;
+                balanceRef.current = updatedBal;
+                setBalance(updatedBal);
+                setLastWin(result.winAmount);
+                setWinningCells(result.winningCells);
+                setIsBonusFlash(result.isFullGridBonus);
+                setStatusBanner(result.matchedLines.join(" • "));
+                playWinSound(result.isFullGridBonus);
+              } else {
+                setStatusBanner("Sem combinação nesta rodada — tente novamente!");
+              }
+
+              if (autoSpinsRef.current > 0) {
+                const remaining = autoSpinsRef.current - 1;
+                autoSpinsRef.current = remaining;
+                setAutoSpinsLeft(remaining);
+
+                if (remaining > 0 && balanceRef.current >= betRef.current) {
+                  const autoNextId = window.setTimeout(() => {
+                    startSingleSpin(true);
+                  }, turboRef.current ? 450 : 850);
+                  timeoutsRef.current.push(autoNextId);
+                } else {
+                  setAutoSpinsLeft(0);
+                  autoSpinsRef.current = 0;
+                }
+              }
+            }
+
+            return next;
+          });
+        }, stopDelays[colIdx]);
+
+        timeoutsRef.current.push(timeoutId);
+      });
+    },
+    [playReelStop, playReelTick, playWinSound, unlockAudio]
+  );
+
+  const handleManualSpin = () => {
+    if (isSpinning) return;
+    if (autoSpinsLeft > 0) {
+      setAutoSpinsLeft(0);
+      autoSpinsRef.current = 0;
+      clearTimers();
+      setColumns((prev) => [
+        { ...prev[0], spinning: false, stepping: false },
+        { ...prev[1], spinning: false, stepping: false },
+        { ...prev[2], spinning: false, stepping: false },
+      ]);
+      setStatusBanner("Modo AUTO pausado.");
       return;
     }
+    startSingleSpin(false);
+  };
 
-    await unlockAudio();
-    clearTimers();
-    setLastWin(0);
-    setWinningCells(new Set());
-    setIsBonusFlash(false);
-    setBalance((prev) => prev - bet);
-    setStatusBanner("Rolos descendo...");
+  const handleStartAuto = (count: number) => {
+    if (isSpinning || autoSpinsLeft > 0) return;
+    if (balance < bet) {
+      setStatusBanner("Saldo insuficiente para iniciar o AUTO.");
+      return;
+    }
+    autoSpinsRef.current = count;
+    setAutoSpinsLeft(count);
+    startSingleSpin(true);
+  };
 
-    const finalCols = generateOutcomeColumns();
-    const stepMs = turbo ? 55 : 90;
-    const stopDelays = turbo ? [320, 560, 800] : [700, 1150, 1600];
+  const handleChangeBet = (delta: number) => {
+    if (isSpinning || autoSpinsLeft > 0) return;
+    setBetIndex((prev) => Math.max(0, Math.min(BET_STEPS.length - 1, prev + delta)));
+  };
 
-    setColumns((prev) => [
-      { ...prev[0], spinning: true, landed: false },
-      { ...prev[1], spinning: true, landed: false },
-      { ...prev[2], spinning: true, landed: false },
-    ]);
-
-    ([0, 1, 2] as const).forEach((colIdx) => {
-      const intervalId = window.setInterval(() => {
-        playReelTick(colIdx);
-        setColumns((prev) => {
-          const next = [...prev] as [ReelColumnState, ReelColumnState, ReelColumnState];
-          if (!next[colIdx].spinning) return prev;
-          const newTop = pickWeightedSymbol();
-          next[colIdx] = {
-            ...next[colIdx],
-            symbols: [newTop, next[colIdx].symbols[0], next[colIdx].symbols[1]],
-          };
-          return next;
-        });
-      }, stepMs);
-
-      intervalsRef.current.push(intervalId);
-
-      const timeoutId = window.setTimeout(() => {
-        window.clearInterval(intervalId);
-        playReelStop(colIdx);
-
-        setColumns((prev) => {
-          const next = [...prev] as [ReelColumnState, ReelColumnState, ReelColumnState];
-          next[colIdx] = {
-            symbols: [...finalCols[colIdx]],
-            spinning: false,
-            landed: true,
-          };
-
-          if (!next[0].spinning && !next[1].spinning && !next[2].spinning) {
-            const flatGrid: SymbolId[] = [
-              next[0].symbols[0], next[1].symbols[0], next[2].symbols[0],
-              next[0].symbols[1], next[1].symbols[1], next[2].symbols[1],
-              next[0].symbols[2], next[1].symbols[2], next[2].symbols[2],
-            ];
-
-            const result = evaluateGrid(flatGrid, bet);
-            if (result.winAmount > 0) {
-              setBalance((b) => b + result.winAmount);
-              setLastWin(result.winAmount);
-              setWinningCells(result.winningCells);
-              setIsBonusFlash(result.isFullGridBonus);
-              setStatusBanner(result.matchedLines.join(" • "));
-              playWinSound(result.isFullGridBonus);
-            } else {
-              setStatusBanner("Sem combinação nesta rodada — tente novamente!");
-            }
-          }
-
-          return next;
-        });
-      }, stopDelays[colIdx]);
-
-      timeoutsRef.current.push(timeoutId);
-    });
+  const handleMaxBet = () => {
+    if (isSpinning || autoSpinsLeft > 0) return;
+    setBetIndex(BET_STEPS.length - 1);
   };
 
   const handleRefill = () => {
-    if (isSpinning) return;
+    if (isSpinning || autoSpinsLeft > 0) return;
+    balanceRef.current = 1000;
     setBalance(1000);
     setLastWin(0);
     setWinningCells(new Set());
@@ -380,37 +535,20 @@ export default function FortuneTigerDemoPage() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-red-950 via-zinc-950 to-black text-amber-50 flex flex-col items-center justify-center p-4 select-none">
       <style jsx global>{`
-        @keyframes dropDownReel {
-          0% {
-            transform: translateY(-28px);
-          }
-          100% {
-            transform: translateY(0px);
-          }
-        }
         @keyframes landBounce {
-          0% {
-            transform: translateY(-10px) scale(0.98);
-          }
-          65% {
-            transform: translateY(4px) scale(1.02);
-          }
-          100% {
-            transform: translateY(0px) scale(1);
-          }
-        }
-        .reel-drop-spin {
-          animation: dropDownReel 0.09s linear infinite;
+          0% { transform: translateY(-12px) scale(0.98); }
+          60% { transform: translateY(5px) scale(1.02); }
+          100% { transform: translateY(0px) scale(1); }
         }
         .reel-land-bounce {
-          animation: landBounce 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+          animation: landBounce 0.22s cubic-bezier(0.22, 1, 0.36, 1);
         }
       `}</style>
 
       <div
         className={`w-full max-w-md rounded-3xl border-2 ${
           isBonusFlash ? "border-yellow-300 shadow-[0_0_40px_rgba(250,204,21,0.55)]" : "border-amber-500/50 shadow-2xl"
-        } bg-zinc-900/95 p-4 space-y-4`}
+        } bg-zinc-900/95 p-4 space-y-3.5`}
       >
         <header className="flex items-center justify-between gap-2 border-b border-amber-500/20 pb-3">
           <div>
@@ -426,7 +564,7 @@ export default function FortuneTigerDemoPage() {
             <button
               type="button"
               onClick={handleToggleSound}
-              disabled={isSpinning}
+              disabled={isSpinning || autoSpinsLeft > 0}
               className={`px-2.5 py-1.5 rounded-full text-xs font-bold border transition ${
                 soundEnabled
                   ? "bg-emerald-400/20 text-emerald-300 border-emerald-400/40"
@@ -439,14 +577,14 @@ export default function FortuneTigerDemoPage() {
             <button
               type="button"
               onClick={() => setTurbo((t) => !t)}
-              disabled={isSpinning}
+              disabled={isSpinning || autoSpinsLeft > 0}
               className={`px-3 py-1.5 rounded-full text-xs font-bold border transition ${
                 turbo
                   ? "bg-amber-400 text-zinc-950 border-amber-300"
                   : "bg-zinc-800 text-amber-300 border-amber-500/30 hover:bg-zinc-700"
               }`}
             >
-              ⚡ TURBO {turbo ? "ON" : "OFF"}
+              ⚡ TURBO
             </button>
           </div>
         </header>
@@ -458,7 +596,7 @@ export default function FortuneTigerDemoPage() {
           </div>
 
           <div className="rounded-2xl bg-zinc-950/90 border border-amber-500/20 p-2.5">
-            <span className="block text-[10px] uppercase tracking-wider text-zinc-400">Aposta</span>
+            <span className="block text-[10px] uppercase tracking-wider text-zinc-400">Aposta Total</span>
             <span className="text-base font-bold text-amber-300">{bet}</span>
           </div>
 
@@ -470,46 +608,58 @@ export default function FortuneTigerDemoPage() {
           </div>
         </section>
 
-        <section className="rounded-2xl bg-gradient-to-b from-red-900/40 to-zinc-950 border-2 border-amber-500/40 p-3 overflow-hidden">
+        <section className="rounded-2xl bg-gradient-to-b from-red-900/40 to-zinc-950 border-2 border-amber-500/40 p-3">
           <div className="grid grid-cols-3 gap-2.5">
-            {columns.map((col, colIndex) => (
-              <div
-                key={colIndex}
-                className={`overflow-hidden rounded-2xl bg-zinc-950/60 p-1 border border-amber-500/15 ${
-                  col.spinning ? "reel-drop-spin" : col.landed ? "reel-land-bounce" : ""
-                }`}
-              >
-                <div className="flex flex-col gap-2">
-                  {col.symbols.map((symbolId, rowIndex) => {
-                    const cellIndex = rowIndex * 3 + colIndex;
-                    const isWinner = winningCells.has(cellIndex);
-                    const sym = SYMBOL_MAP[symbolId];
+            {columns.map((col, colIndex) => {
+              const visibleSymbols = col.spinning ? col.strip : col.strip.slice(1, 4);
 
-                    return (
-                      <div
-                        key={`${colIndex}-${rowIndex}`}
-                        className={`h-22 rounded-xl flex flex-col items-center justify-center border transition-all duration-150 ${
-                          isWinner
-                            ? `bg-gradient-to-br ${sym.accent} border-yellow-200 scale-105 shadow-lg shadow-amber-500/30 text-zinc-950`
-                            : "bg-zinc-900/95 border-amber-500/20 text-white"
-                        } ${col.spinning ? "blur-[0.6px]" : ""}`}
-                      >
-                        <span className="text-4xl leading-none" role="img" aria-label={sym.name}>
-                          {sym.glyph}
-                        </span>
-                        <span
-                          className={`mt-1.5 text-[10px] font-semibold tracking-tight ${
-                            isWinner ? "text-zinc-950" : "text-amber-200/75"
-                          }`}
+              return (
+                <div
+                  key={colIndex}
+                  className={`h-[296px] overflow-hidden rounded-2xl bg-zinc-950/75 p-1 border border-amber-500/15 ${
+                    !col.spinning && col.landed ? "reel-land-bounce" : ""
+                  }`}
+                >
+                  <div
+                    className={`flex flex-col gap-2 ${
+                      col.spinning
+                        ? "-mt-[96px] transition-transform duration-75 ease-linear " +
+                          (col.stepping ? "translate-y-[96px]" : "translate-y-0")
+                        : "translate-y-0"
+                    }`}
+                  >
+                    {visibleSymbols.map((symbolId, idx) => {
+                      const rowIndex = col.spinning ? Math.max(0, idx - 1) : idx;
+                      const cellIndex = rowIndex * 3 + colIndex;
+                      const isWinner = !col.spinning && winningCells.has(cellIndex);
+                      const sym = SYMBOL_MAP[symbolId];
+
+                      return (
+                        <div
+                          key={`${colIndex}-${idx}`}
+                          className={`h-[88px] shrink-0 rounded-xl flex flex-col items-center justify-center border transition-all duration-150 ${
+                            isWinner
+                              ? `bg-gradient-to-br ${sym.accent} border-yellow-200 scale-105 shadow-lg shadow-amber-500/30 text-zinc-950`
+                              : "bg-zinc-900/95 border-amber-500/20 text-white"
+                          } ${col.spinning ? "blur-[0.5px]" : ""}`}
                         >
-                          {sym.id === "tiger" ? "WILD ×25" : `×${sym.payout3}`}
-                        </span>
-                      </div>
-                    );
-                  })}
+                          <span className="text-4xl leading-none" role="img" aria-label={sym.name}>
+                            {sym.glyph}
+                          </span>
+                          <span
+                            className={`mt-1.5 text-[10px] font-semibold tracking-tight ${
+                              isWinner ? "text-zinc-950" : "text-amber-200/75"
+                            }`}
+                          >
+                            {sym.id === "tiger" ? "WILD ×25" : `×${sym.payout3}`}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
 
@@ -517,47 +667,120 @@ export default function FortuneTigerDemoPage() {
           <p className="text-xs font-medium text-amber-200">{statusBanner}</p>
         </div>
 
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between text-xs text-zinc-400 px-1">
-            <span>Valor da aposta</span>
+        {/* Sistema de Aposta Estilo Tigrinho */}
+        <section className="rounded-2xl bg-zinc-950/85 border border-amber-500/25 p-3 space-y-2.5">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-zinc-400 font-medium">Aposta ({PAYLINES.length} linhas)</span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowBetMenu((v) => !v)}
+                disabled={isSpinning || autoSpinsLeft > 0}
+                className="text-amber-300 font-semibold hover:underline disabled:opacity-40"
+              >
+                {showBetMenu ? "Fechar tabela" : "Ver valores"}
+              </button>
+              <button
+                type="button"
+                onClick={handleRefill}
+                disabled={isSpinning || autoSpinsLeft > 0}
+                className="text-emerald-400 font-semibold hover:underline disabled:opacity-40"
+              >
+                +1.000 Saldo
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={handleRefill}
-              disabled={isSpinning}
-              className="text-amber-400 hover:underline disabled:opacity-40"
+              onClick={() => handleChangeBet(-1)}
+              disabled={isSpinning || autoSpinsLeft > 0 || betIndex === 0}
+              className="w-11 h-11 rounded-xl bg-zinc-800 border border-amber-500/30 text-xl font-black text-amber-300 hover:bg-zinc-700 disabled:opacity-35"
             >
-              Recarregar 1.000
+              −
+            </button>
+
+            <div className="flex-1 h-11 rounded-xl bg-zinc-900 border border-amber-400/40 flex flex-col items-center justify-center">
+              <span className="text-[10px] uppercase text-zinc-400 leading-none">Por Giro</span>
+              <span className="text-base font-extrabold text-amber-300 leading-tight">{bet}</span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => handleChangeBet(1)}
+              disabled={isSpinning || autoSpinsLeft > 0 || betIndex === BET_STEPS.length - 1}
+              className="w-11 h-11 rounded-xl bg-zinc-800 border border-amber-500/30 text-xl font-black text-amber-300 hover:bg-zinc-700 disabled:opacity-35"
+            >
+              +
+            </button>
+
+            <button
+              type="button"
+              onClick={handleMaxBet}
+              disabled={isSpinning || autoSpinsLeft > 0}
+              className="px-3 h-11 rounded-xl bg-amber-500/20 border border-amber-400/40 text-xs font-extrabold text-amber-300 hover:bg-amber-500/30 disabled:opacity-35"
+            >
+              MÁX
             </button>
           </div>
-          <div className="grid grid-cols-5 gap-1.5">
-            {BET_OPTIONS.map((amount) => {
-              const active = bet === amount;
-              return (
+
+          {showBetMenu && (
+            <div className="grid grid-cols-4 gap-1.5 pt-1">
+              {BET_STEPS.map((val, idx) => (
                 <button
-                  key={amount}
+                  key={val}
                   type="button"
-                  disabled={isSpinning}
-                  onClick={() => setBet(amount)}
-                  className={`py-2 rounded-xl text-xs font-bold border transition ${
-                    active
-                      ? "bg-amber-500 text-zinc-950 border-amber-300"
-                      : "bg-zinc-800/90 text-zinc-300 border-zinc-700 hover:bg-zinc-700"
-                  } disabled:opacity-40`}
+                  onClick={() => {
+                    setBetIndex(idx);
+                    setShowBetMenu(false);
+                  }}
+                  className={`py-1.5 rounded-lg text-xs font-bold border ${
+                    idx === betIndex
+                      ? "bg-amber-400 text-zinc-950 border-amber-200"
+                      : "bg-zinc-800 text-zinc-300 border-zinc-700"
+                  }`}
                 >
-                  {amount}
+                  {val}
                 </button>
-              );
-            })}
+              ))}
+            </div>
+          )}
+
+          {/* Atalhos AUTO */}
+          <div className="flex items-center justify-between gap-1.5 pt-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">AUTO:</span>
+            <div className="flex items-center gap-1.5">
+              {AUTO_OPTIONS.map((count) => (
+                <button
+                  key={count}
+                  type="button"
+                  onClick={() => handleStartAuto(count)}
+                  disabled={isSpinning || autoSpinsLeft > 0}
+                  className="px-2.5 py-1 rounded-lg bg-zinc-800 border border-zinc-700 text-xs font-bold text-amber-200 hover:border-amber-400/50 disabled:opacity-35"
+                >
+                  {count}×
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        </section>
 
         <button
           type="button"
-          onClick={handleSpin}
-          disabled={isSpinning}
-          className="w-full py-4 rounded-2xl font-black text-lg tracking-wider uppercase bg-gradient-to-r from-yellow-400 via-amber-500 to-orange-500 text-zinc-950 shadow-lg shadow-amber-500/25 hover:brightness-110 active:scale-[0.99] transition disabled:opacity-50"
+          onClick={handleManualSpin}
+          className={`w-full py-4 rounded-2xl font-black text-lg tracking-wider uppercase shadow-lg active:scale-[0.99] transition ${
+            autoSpinsLeft > 0
+              ? "bg-gradient-to-r from-rose-500 to-red-600 text-white shadow-red-500/25"
+              : "bg-gradient-to-r from-yellow-400 via-amber-500 to-orange-500 text-zinc-950 shadow-amber-500/25 hover:brightness-110 disabled:opacity-50"
+          }`}
+          disabled={isSpinning && autoSpinsLeft === 0}
         >
-          {isSpinning ? "Girando..." : "Girar"}
+          {autoSpinsLeft > 0
+            ? `Parar AUTO (${autoSpinsLeft})`
+            : isSpinning
+            ? "Girando..."
+            : `Girar (${bet})`}
         </button>
 
         <footer className="pt-2 border-t border-zinc-800 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-zinc-400">
