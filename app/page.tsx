@@ -14,12 +14,12 @@ interface SymbolConfig {
 }
 
 const SYMBOLS: SymbolConfig[] = [
-  { id: "tiger", name: "Tigre Dourado", glyph: "🐯", payout3: 25, weight: 8, accent: "from-amber-400 to-orange-600" },
-  { id: "ingot", name: "Lingote", glyph: "🪙", payout3: 10, weight: 14, accent: "from-yellow-300 to-amber-500" },
-  { id: "bag", name: "Bolsa da Sorte", glyph: "💰", payout3: 8, weight: 18, accent: "from-emerald-400 to-teal-600" },
-  { id: "lantern", name: "Lanterna", glyph: "🏮", payout3: 5, weight: 22, accent: "from-rose-500 to-red-700" },
-  { id: "envelope", name: "Envelope", glyph: "🧧", payout3: 3, weight: 26, accent: "from-red-400 to-rose-600" },
-  { id: "orange", name: "Tangerina", glyph: "🍊", payout3: 2, weight: 30, accent: "from-orange-300 to-amber-500" },
+  { id: "tiger", name: "Tigre Brasil", glyph: "🐯", payout3: 25, weight: 8, accent: "from-yellow-300 via-amber-400 to-emerald-500" },
+  { id: "ingot", name: "Ouro Verde", glyph: "🪙", payout3: 10, weight: 14, accent: "from-yellow-300 to-amber-500" },
+  { id: "bag", name: "Bolsa da Sorte", glyph: "💰", payout3: 8, weight: 18, accent: "from-emerald-400 to-green-600" },
+  { id: "lantern", name: "Estrela Azul", glyph: "🌟", payout3: 5, weight: 22, accent: "from-sky-400 to-blue-700" },
+  { id: "envelope", name: "Cofre Azul", glyph: "💎", payout3: 3, weight: 26, accent: "from-cyan-300 to-blue-600" },
+  { id: "orange", name: "Fruta Tropical", glyph: "🍍", payout3: 2, weight: 30, accent: "from-yellow-300 to-lime-500" },
 ];
 
 const SYMBOL_MAP: Record<SymbolId, SymbolConfig> = SYMBOLS.reduce(
@@ -154,9 +154,9 @@ function createInitialColumns(): [ReelColumnState, ReelColumnState, ReelColumnSt
   ];
 }
 
-export default function FortuneTigerDemoPage() {
+export default function TigrinhoBrasilPage() {
   const [balance, setBalance] = useState<number>(1000);
-  const [betIndex, setBetIndex] = useState<number>(2); // 20
+  const [betIndex, setBetIndex] = useState<number>(2);
   const [columns, setColumns] = useState<[ReelColumnState, ReelColumnState, ReelColumnState]>(createInitialColumns);
   const [turbo, setTurbo] = useState<boolean>(false);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
@@ -164,7 +164,7 @@ export default function FortuneTigerDemoPage() {
   const [showBetMenu, setShowBetMenu] = useState<boolean>(false);
   const [lastWin, setLastWin] = useState<number>(0);
   const [winningCells, setWinningCells] = useState<Set<number>>(new Set());
-  const [statusBanner, setStatusBanner] = useState<string>("Ajuste a aposta e toque em GIRAR");
+  const [statusBanner, setStatusBanner] = useState<string>("Bem-vindo ao Tigrinho Brasil! Toque em GIRAR");
   const [isBonusFlash, setIsBonusFlash] = useState<boolean>(false);
 
   const bet = BET_STEPS[betIndex];
@@ -533,7 +533,7 @@ export default function FortuneTigerDemoPage() {
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-red-950 via-zinc-950 to-black text-amber-50 flex flex-col items-center justify-center p-4 select-none">
+    <main className="min-h-screen bg-gradient-to-b from-emerald-900 via-blue-950 to-emerald-950 text-yellow-50 flex flex-col items-center justify-center p-4 select-none">
       <style jsx global>{`
         @keyframes landBounce {
           0% { transform: translateY(-12px) scale(0.98); }
@@ -547,16 +547,18 @@ export default function FortuneTigerDemoPage() {
 
       <div
         className={`w-full max-w-md rounded-3xl border-2 ${
-          isBonusFlash ? "border-yellow-300 shadow-[0_0_40px_rgba(250,204,21,0.55)]" : "border-amber-500/50 shadow-2xl"
-        } bg-zinc-900/95 p-4 space-y-3.5`}
+          isBonusFlash
+            ? "border-yellow-300 shadow-[0_0_40px_rgba(253,224,71,0.65)]"
+            : "border-yellow-400/50 shadow-2xl"
+        } bg-gradient-to-b from-emerald-950/95 via-blue-950/95 to-emerald-950/95 p-4 space-y-3.5`}
       >
-        <header className="flex items-center justify-between gap-2 border-b border-amber-500/20 pb-3">
+        <header className="flex items-center justify-between gap-2 border-b border-yellow-400/25 pb-3">
           <div>
-            <p className="text-[11px] uppercase tracking-widest text-amber-400 font-semibold">
-              Protótipo Educativo • Sem Valor Real
+            <p className="text-[11px] uppercase tracking-widest text-yellow-300 font-bold">
+              🇧🇷 Verde • Amarelo • Azul
             </p>
-            <h1 className="text-xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-amber-400 to-orange-500">
-              🐯 Fortune Tiger Demo
+            <h1 className="text-xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 via-yellow-400 to-sky-300">
+              🐯 Tigrinho Brasil
             </h1>
           </div>
 
@@ -567,8 +569,8 @@ export default function FortuneTigerDemoPage() {
               disabled={isSpinning || autoSpinsLeft > 0}
               className={`px-2.5 py-1.5 rounded-full text-xs font-bold border transition ${
                 soundEnabled
-                  ? "bg-emerald-400/20 text-emerald-300 border-emerald-400/40"
-                  : "bg-zinc-800 text-zinc-400 border-zinc-700"
+                  ? "bg-emerald-500/25 text-yellow-200 border-yellow-400/45"
+                  : "bg-blue-950 text-sky-300/70 border-sky-700"
               }`}
             >
               {soundEnabled ? "🔊 SOM" : "🔇 MUDO"}
@@ -580,8 +582,8 @@ export default function FortuneTigerDemoPage() {
               disabled={isSpinning || autoSpinsLeft > 0}
               className={`px-3 py-1.5 rounded-full text-xs font-bold border transition ${
                 turbo
-                  ? "bg-amber-400 text-zinc-950 border-amber-300"
-                  : "bg-zinc-800 text-amber-300 border-amber-500/30 hover:bg-zinc-700"
+                  ? "bg-yellow-400 text-blue-950 border-yellow-200"
+                  : "bg-blue-900/80 text-yellow-300 border-yellow-400/35 hover:bg-blue-800"
               }`}
             >
               ⚡ TURBO
@@ -590,25 +592,25 @@ export default function FortuneTigerDemoPage() {
         </header>
 
         <section className="grid grid-cols-3 gap-2 text-center">
-          <div className="rounded-2xl bg-zinc-950/90 border border-amber-500/20 p-2.5">
-            <span className="block text-[10px] uppercase tracking-wider text-zinc-400">Saldo</span>
-            <span className="text-base font-bold text-emerald-400">{balance}</span>
+          <div className="rounded-2xl bg-blue-950/85 border border-emerald-400/35 p-2.5">
+            <span className="block text-[10px] uppercase tracking-wider text-sky-200">Saldo</span>
+            <span className="text-base font-extrabold text-emerald-300">{balance}</span>
           </div>
 
-          <div className="rounded-2xl bg-zinc-950/90 border border-amber-500/20 p-2.5">
-            <span className="block text-[10px] uppercase tracking-wider text-zinc-400">Aposta Total</span>
-            <span className="text-base font-bold text-amber-300">{bet}</span>
+          <div className="rounded-2xl bg-blue-950/85 border border-yellow-400/35 p-2.5">
+            <span className="block text-[10px] uppercase tracking-wider text-sky-200">Aposta Total</span>
+            <span className="text-base font-extrabold text-yellow-300">{bet}</span>
           </div>
 
-          <div className="rounded-2xl bg-zinc-950/90 border border-amber-500/20 p-2.5">
-            <span className="block text-[10px] uppercase tracking-wider text-zinc-400">Ganho</span>
-            <span className={`text-base font-bold ${lastWin > 0 ? "text-yellow-300 animate-pulse" : "text-zinc-500"}`}>
+          <div className="rounded-2xl bg-blue-950/85 border border-sky-400/35 p-2.5">
+            <span className="block text-[10px] uppercase tracking-wider text-sky-200">Ganho</span>
+            <span className={`text-base font-extrabold ${lastWin > 0 ? "text-yellow-300 animate-pulse" : "text-sky-400/60"}`}>
               {lastWin > 0 ? `+${lastWin}` : "0"}
             </span>
           </div>
         </section>
 
-        <section className="rounded-2xl bg-gradient-to-b from-red-900/40 to-zinc-950 border-2 border-amber-500/40 p-3">
+        <section className="rounded-2xl bg-gradient-to-b from-emerald-800/45 via-blue-950/80 to-emerald-950 border-2 border-yellow-400/45 p-3">
           <div className="grid grid-cols-3 gap-2.5">
             {columns.map((col, colIndex) => {
               const visibleSymbols = col.spinning ? col.strip : col.strip.slice(1, 4);
@@ -616,7 +618,7 @@ export default function FortuneTigerDemoPage() {
               return (
                 <div
                   key={colIndex}
-                  className={`h-[296px] overflow-hidden rounded-2xl bg-zinc-950/75 p-1 border border-amber-500/15 ${
+                  className={`h-[296px] overflow-hidden rounded-2xl bg-blue-950/85 p-1 border border-yellow-400/20 ${
                     !col.spinning && col.landed ? "reel-land-bounce" : ""
                   }`}
                 >
@@ -639,16 +641,16 @@ export default function FortuneTigerDemoPage() {
                           key={`${colIndex}-${idx}`}
                           className={`h-[88px] shrink-0 rounded-xl flex flex-col items-center justify-center border transition-all duration-150 ${
                             isWinner
-                              ? `bg-gradient-to-br ${sym.accent} border-yellow-200 scale-105 shadow-lg shadow-amber-500/30 text-zinc-950`
-                              : "bg-zinc-900/95 border-amber-500/20 text-white"
+                              ? `bg-gradient-to-br ${sym.accent} border-yellow-200 scale-105 shadow-lg shadow-yellow-400/30 text-blue-950`
+                              : "bg-emerald-950/90 border-sky-400/25 text-white"
                           } ${col.spinning ? "blur-[0.5px]" : ""}`}
                         >
                           <span className="text-4xl leading-none" role="img" aria-label={sym.name}>
                             {sym.glyph}
                           </span>
                           <span
-                            className={`mt-1.5 text-[10px] font-semibold tracking-tight ${
-                              isWinner ? "text-zinc-950" : "text-amber-200/75"
+                            className={`mt-1.5 text-[10px] font-bold tracking-tight ${
+                              isWinner ? "text-blue-950" : "text-yellow-300/85"
                             }`}
                           >
                             {sym.id === "tiger" ? "WILD ×25" : `×${sym.payout3}`}
@@ -663,20 +665,19 @@ export default function FortuneTigerDemoPage() {
           </div>
         </section>
 
-        <div className="min-h-10 rounded-xl bg-zinc-950/80 border border-amber-500/15 px-3 py-2 flex items-center justify-center text-center">
-          <p className="text-xs font-medium text-amber-200">{statusBanner}</p>
+        <div className="min-h-10 rounded-xl bg-blue-950/90 border border-yellow-400/25 px-3 py-2 flex items-center justify-center text-center">
+          <p className="text-xs font-semibold text-yellow-200">{statusBanner}</p>
         </div>
 
-        {/* Sistema de Aposta Estilo Tigrinho */}
-        <section className="rounded-2xl bg-zinc-950/85 border border-amber-500/25 p-3 space-y-2.5">
+        <section className="rounded-2xl bg-blue-950/85 border border-emerald-400/30 p-3 space-y-2.5">
           <div className="flex items-center justify-between text-xs">
-            <span className="text-zinc-400 font-medium">Aposta ({PAYLINES.length} linhas)</span>
+            <span className="text-sky-200 font-medium">Aposta ({PAYLINES.length} linhas)</span>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => setShowBetMenu((v) => !v)}
                 disabled={isSpinning || autoSpinsLeft > 0}
-                className="text-amber-300 font-semibold hover:underline disabled:opacity-40"
+                className="text-yellow-300 font-semibold hover:underline disabled:opacity-40"
               >
                 {showBetMenu ? "Fechar tabela" : "Ver valores"}
               </button>
@@ -684,7 +685,7 @@ export default function FortuneTigerDemoPage() {
                 type="button"
                 onClick={handleRefill}
                 disabled={isSpinning || autoSpinsLeft > 0}
-                className="text-emerald-400 font-semibold hover:underline disabled:opacity-40"
+                className="text-emerald-300 font-semibold hover:underline disabled:opacity-40"
               >
                 +1.000 Saldo
               </button>
@@ -696,21 +697,21 @@ export default function FortuneTigerDemoPage() {
               type="button"
               onClick={() => handleChangeBet(-1)}
               disabled={isSpinning || autoSpinsLeft > 0 || betIndex === 0}
-              className="w-11 h-11 rounded-xl bg-zinc-800 border border-amber-500/30 text-xl font-black text-amber-300 hover:bg-zinc-700 disabled:opacity-35"
+              className="w-11 h-11 rounded-xl bg-emerald-900 border border-yellow-400/35 text-xl font-black text-yellow-300 hover:bg-emerald-800 disabled:opacity-35"
             >
               −
             </button>
 
-            <div className="flex-1 h-11 rounded-xl bg-zinc-900 border border-amber-400/40 flex flex-col items-center justify-center">
-              <span className="text-[10px] uppercase text-zinc-400 leading-none">Por Giro</span>
-              <span className="text-base font-extrabold text-amber-300 leading-tight">{bet}</span>
+            <div className="flex-1 h-11 rounded-xl bg-blue-900/80 border border-yellow-400/45 flex flex-col items-center justify-center">
+              <span className="text-[10px] uppercase text-sky-200 leading-none">Por Giro</span>
+              <span className="text-base font-extrabold text-yellow-300 leading-tight">{bet}</span>
             </div>
 
             <button
               type="button"
               onClick={() => handleChangeBet(1)}
               disabled={isSpinning || autoSpinsLeft > 0 || betIndex === BET_STEPS.length - 1}
-              className="w-11 h-11 rounded-xl bg-zinc-800 border border-amber-500/30 text-xl font-black text-amber-300 hover:bg-zinc-700 disabled:opacity-35"
+              className="w-11 h-11 rounded-xl bg-emerald-900 border border-yellow-400/35 text-xl font-black text-yellow-300 hover:bg-emerald-800 disabled:opacity-35"
             >
               +
             </button>
@@ -719,7 +720,7 @@ export default function FortuneTigerDemoPage() {
               type="button"
               onClick={handleMaxBet}
               disabled={isSpinning || autoSpinsLeft > 0}
-              className="px-3 h-11 rounded-xl bg-amber-500/20 border border-amber-400/40 text-xs font-extrabold text-amber-300 hover:bg-amber-500/30 disabled:opacity-35"
+              className="px-3 h-11 rounded-xl bg-yellow-400/20 border border-yellow-300/45 text-xs font-extrabold text-yellow-300 hover:bg-yellow-400/30 disabled:opacity-35"
             >
               MÁX
             </button>
@@ -737,8 +738,8 @@ export default function FortuneTigerDemoPage() {
                   }}
                   className={`py-1.5 rounded-lg text-xs font-bold border ${
                     idx === betIndex
-                      ? "bg-amber-400 text-zinc-950 border-amber-200"
-                      : "bg-zinc-800 text-zinc-300 border-zinc-700"
+                      ? "bg-yellow-400 text-blue-950 border-yellow-200"
+                      : "bg-emerald-950 text-sky-200 border-sky-700"
                   }`}
                 >
                   {val}
@@ -747,9 +748,8 @@ export default function FortuneTigerDemoPage() {
             </div>
           )}
 
-          {/* Atalhos AUTO */}
           <div className="flex items-center justify-between gap-1.5 pt-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">AUTO:</span>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-sky-200">AUTO:</span>
             <div className="flex items-center gap-1.5">
               {AUTO_OPTIONS.map((count) => (
                 <button
@@ -757,7 +757,7 @@ export default function FortuneTigerDemoPage() {
                   type="button"
                   onClick={() => handleStartAuto(count)}
                   disabled={isSpinning || autoSpinsLeft > 0}
-                  className="px-2.5 py-1 rounded-lg bg-zinc-800 border border-zinc-700 text-xs font-bold text-amber-200 hover:border-amber-400/50 disabled:opacity-35"
+                  className="px-2.5 py-1 rounded-lg bg-emerald-900/90 border border-emerald-500/35 text-xs font-bold text-yellow-200 hover:border-yellow-300 disabled:opacity-35"
                 >
                   {count}×
                 </button>
@@ -771,8 +771,8 @@ export default function FortuneTigerDemoPage() {
           onClick={handleManualSpin}
           className={`w-full py-4 rounded-2xl font-black text-lg tracking-wider uppercase shadow-lg active:scale-[0.99] transition ${
             autoSpinsLeft > 0
-              ? "bg-gradient-to-r from-rose-500 to-red-600 text-white shadow-red-500/25"
-              : "bg-gradient-to-r from-yellow-400 via-amber-500 to-orange-500 text-zinc-950 shadow-amber-500/25 hover:brightness-110 disabled:opacity-50"
+              ? "bg-gradient-to-r from-sky-500 to-blue-700 text-yellow-200 shadow-blue-900/40"
+              : "bg-gradient-to-r from-yellow-300 via-yellow-400 to-emerald-400 text-blue-950 shadow-yellow-400/25 hover:brightness-105 disabled:opacity-50"
           }`}
           disabled={isSpinning && autoSpinsLeft === 0}
         >
@@ -783,13 +783,13 @@ export default function FortuneTigerDemoPage() {
             : `Girar (${bet})`}
         </button>
 
-        <footer className="pt-2 border-t border-zinc-800 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-zinc-400">
+        <footer className="pt-2 border-t border-yellow-400/20 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-sky-200">
           {SYMBOLS.map((s) => (
             <span key={s.id}>
-              {s.glyph} 3x = <strong className="text-amber-300">{s.payout3}x</strong>
+              {s.glyph} 3x = <strong className="text-yellow-300">{s.payout3}x</strong>
             </span>
           ))}
-          <span className="text-yellow-300 font-semibold">• Grade 9x = 10x bônus</span>
+          <span className="text-emerald-300 font-semibold">• Grade 9x = 10x bônus</span>
         </footer>
       </div>
     </main>
