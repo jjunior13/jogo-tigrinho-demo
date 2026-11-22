@@ -87,7 +87,7 @@ function detectWinningLinesFromGrid(grid: string[], betCents: number): WinningLi
       indices: line.indices,
       symbol: sym,
       multiplier: mult,
-      payoutCents: Math.round(betCents * mult),
+      payoutCents: Math.max(1, Math.round(Math.round(betCents * mult) * 0.3)),
     });
   }
   return found;

@@ -69,7 +69,8 @@ function evaluateLine(grid: GameSymbol[], line: PaylineDef, betCents: number): W
     winningSymbol = first;
   }
   const multiplier = LINE_PAYOUT_MULTIPLIER[winningSymbol];
-  const payoutCents = Math.round(betCents * multiplier);
+  const grossLineCents = Math.round(betCents * multiplier);
+  const payoutCents = Math.max(1, Math.round(grossLineCents * 0.3));
   return {
     id: line.id,
     label: line.label,
@@ -176,7 +177,7 @@ async function generateGrid(betCents: number, playerId: number) {
       (x): x is WinningLineResult => x !== null
     );
     const linesSum = winningLines.reduce((acc, item) => acc + item.payoutCents, 0);
-    const fullGridBonusCents = betCents * 5;
+    const fullGridBonusCents = Math.round(betCents * 5 * 0.3);
     const payoutCents = linesSum + fullGridBonusCents;
     const labels = winningLines.map((l) => l.label + " (" + l.symbol + ")").join(" + ");
     return {
