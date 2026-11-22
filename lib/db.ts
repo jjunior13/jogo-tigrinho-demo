@@ -24,14 +24,46 @@ export async function ensureAuthTables() {
   if (authTablesEnsured) return;
 
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS auth_codes (
+    ALTER TABLE players
+      ADD COLUMN IF NOT EXISTS full_name TEXT,
+      ADD COLUMN IF NOT EXISTS email TEXT,
+      ADD COLUMN IF NOT EXISTS phone TEXT,
+      ADD COLUMN IF NOT EXISTS password_hash TEXT,
+      ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE;
+  `);
+
+  await pool.query(`
+    UPDATE players
+    SET phone = NULL
+    WHERE phone IS NOT NULL AND btrim(phone) = '';
+  `);
+
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS players_email_unique_idx
+      ON players (LOWER(email))
+      WHERE email IS NOT NULL;
+  `);
+
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS players_phone_unique_idx
+      ON players (phone)
+      WHERE phone IS NOT NULL;
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS email_verifications (
       id BIGSERIAL PRIMARY KEY,
-      contact TEXT NOT NULL,
+      email TEXT NOT NULL,
       code TEXT NOT NULL,
       expires_at TIMESTAMPTZ NOT NULL,
       used BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS email_verifications_email_idx
+      ON email_verifications (LOWER(email), created_at DESC);
   `);
 
   authTablesEnsured = true;

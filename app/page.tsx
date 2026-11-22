@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 interface SpinItem {
   id: number;
@@ -13,9 +13,12 @@ interface SpinItem {
 interface PlayerInfo {
   id: number;
   username: string;
+  full_name?: string | null;
+  email?: string | null;
   balance_cents: string;
 }
 
+const SESSION_STORAGE_KEY = "tigrinho_brasil_player_v1";
 const SYMBOLS = ["🐯", "🪙", "🧧", "🍊", "🧨", "💎"];
 const INITIAL_GRID = ["🐯", "🪙", "🧧", "🐯", "🐯", "🐯", "🍊", "🧨", "💎"];
 const BET_OPTIONS = [100, 500, 1000, 2000];
@@ -161,8 +164,22 @@ function columnsToGrid(cols: [string, string, string][]): string[] {
 }
 
 export default function HomePage() {
-  const [username] = useState("jogador_demo");
   const [player, setPlayer] = useState<PlayerInfo | null>(null);
+  const [checkingSession, setCheckingSession] = useState<boolean>(true);
+
+  // Estados da tela de Login / Cadastro / Código
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [step, setStep] = useState<"form" | "code">("form");
+  const [fullName, setFullName] = useState<string>("");
+  const [email, setEmail] = useState<string>("");
+  const [phone, setPhone] = useState<string>("");
+  const [password, setPassword] = useState<string>("");
+  const [code, setCode] = useState<string>("");
+  const [authError, setAuthError] = useState<string>("");
+  const [authNotice, setAuthNotice] = useState<string>("");
+  const [authLoading, setAuthLoading] = useState<boolean>(false);
+
+  // Estados do jogo (só exibidos após autenticar)
   const [reels, setReels] = useState<ReelState[]>(() =>
     gridToColumns(INITIAL_GRID).map((symbols) => ({
       symbols,
@@ -172,40 +189,153 @@ export default function HomePage() {
   );
   const [betCents, setBetCents] = useState<number>(500);
   const [recentSpins, setRecentSpins] = useState<SpinItem[]>([]);
-  const [lastMessage, setLastMessage] = useState<string>("Carregando saldo...");
-  const [loadingPlayer, setLoadingPlayer] = useState<boolean>(true);
+  const [lastMessage, setLastMessage] = useState<string>("Pronto para girar.");
   const [spinning, setSpinning] = useState<boolean>(false);
   const [muted, setMuted] = useState<boolean>(false);
 
   const { unlockAudio, playReelTick, playReelStop, playWinFanfare, playLossSound } = useSlotSound();
 
-  const loadPlayerData = useCallback(async () => {
-    setLoadingPlayer(true);
-    try {
-      const res = await fetch(`/api/player?username=${encodeURIComponent(username)}`, {
-        cache: "no-store",
-      });
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        setLastMessage(data.error || "Erro ao carregar dados do jogador.");
-        return;
-      }
-      setPlayer(data.player);
-      setRecentSpins(data.recentSpins || []);
-      setLastMessage("Pronto para girar.");
-    } catch {
-      setLastMessage("Falha de rede ao consultar /api/player.");
-    } finally {
-      setLoadingPlayer(false);
+  const syncPlayerFromServer = useCallback(async (uname: string) => {
+    const res = await fetch(`/api/player?username=${encodeURIComponent(uname)}`, {
+      cache: "no-store",
+    });
+    const data = await res.json();
+    if (!res.ok || !data?.ok || !data?.player) {
+      throw new Error(data?.error || "Não foi possível sincronizar o jogador.");
     }
-  }, [username]);
+    setPlayer(data.player);
+    setRecentSpins(data.recentSpins || []);
+    window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(data.player));
+  }, []);
 
   useEffect(() => {
-    loadPlayerData();
-  }, [loadPlayerData]);
+    let active = true;
+    async function restoreSession() {
+      try {
+        const raw = window.localStorage.getItem(SESSION_STORAGE_KEY);
+        if (!raw) {
+          if (active) setCheckingSession(false);
+          return;
+        }
+        const saved = JSON.parse(raw) as PlayerInfo;
+        if (!saved?.username) {
+          window.localStorage.removeItem(SESSION_STORAGE_KEY);
+          if (active) setCheckingSession(false);
+          return;
+        }
+        await syncPlayerFromServer(saved.username);
+      } catch {
+        window.localStorage.removeItem(SESSION_STORAGE_KEY);
+      } finally {
+        if (active) setCheckingSession(false);
+      }
+    }
+    restoreSession();
+    return () => {
+      active = false;
+    };
+  }, [syncPlayerFromServer]);
+
+  function handleLogout() {
+    window.localStorage.removeItem(SESSION_STORAGE_KEY);
+    setPlayer(null);
+    setRecentSpins([]);
+    setPassword("");
+    setCode("");
+    setStep("form");
+    setAuthError("");
+    setAuthNotice("");
+  }
+
+  async function handleLoginSubmit(e: FormEvent) {
+    e.preventDefault();
+    setAuthError("");
+    setAuthNotice("");
+    setAuthLoading(true);
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.ok || !data?.player) {
+        setAuthError(data?.error || "Falha ao entrar.");
+        return;
+      }
+      setPassword("");
+      await syncPlayerFromServer(data.player.username);
+    } catch {
+      setAuthError("Erro de rede ao tentar fazer login.");
+    } finally {
+      setAuthLoading(false);
+    }
+  }
+
+  async function handleRequestCode(e: FormEvent) {
+    e.preventDefault();
+    setAuthError("");
+    setAuthNotice("");
+    setAuthLoading(true);
+    try {
+      const res = await fetch("/api/auth/request-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: fullName,
+          email,
+          phone,
+          password,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.ok) {
+        setAuthError(data?.error || "Não foi possível enviar o código.");
+        return;
+      }
+      setStep("code");
+      if (data.devCode) {
+        setAuthNotice(
+          `Código gerado (modo demo sem RESEND_API_KEY): ${data.devCode}`
+        );
+      } else {
+        setAuthNotice("Enviamos um código de 6 dígitos para o seu e-mail.");
+      }
+    } catch {
+      setAuthError("Erro de rede ao solicitar código.");
+    } finally {
+      setAuthLoading(false);
+    }
+  }
+
+  async function handleVerifyCode(e: FormEvent) {
+    e.preventDefault();
+    setAuthError("");
+    setAuthLoading(true);
+    try {
+      const res = await fetch("/api/auth/verify-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, code }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.ok || !data?.player) {
+        setAuthError(data?.error || "Código inválido.");
+        return;
+      }
+      setPassword("");
+      setCode("");
+      setStep("form");
+      await syncPlayerFromServer(data.player.username);
+    } catch {
+      setAuthError("Erro de rede ao validar código.");
+    } finally {
+      setAuthLoading(false);
+    }
+  }
 
   async function handleSpin() {
-    if (spinning) return;
+    if (!player || spinning) return;
     if (!muted) {
       unlockAudio();
     }
@@ -245,7 +375,7 @@ export default function HomePage() {
       const fetchPromise = fetch("/api/spin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, betCents }),
+        body: JSON.stringify({ username: player.username, betCents }),
       }).then((r) => r.json());
 
       const [, data] = await Promise.all([minSpinPromise, fetchPromise]);
@@ -282,7 +412,10 @@ export default function HomePage() {
       }
 
       clearInterval(tickInterval);
-      setPlayer(data.player);
+      if (data.player) {
+        setPlayer(data.player);
+        window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(data.player));
+      }
 
       if (data.spin) {
         setRecentSpins((prev) => [data.spin, ...prev].slice(0, 10));
@@ -304,6 +437,215 @@ export default function HomePage() {
     }
   }
 
+  if (checkingSession) {
+    return (
+      <main className="min-h-screen bg-gradient-to-b from-emerald-950 via-green-950 to-blue-950 text-yellow-200 flex items-center justify-center p-6">
+        <div className="rounded-2xl border-2 border-yellow-400/50 bg-emerald-950/90 px-6 py-4 text-sm font-semibold">
+          🇧🇷 Verificando acesso ao Tigrinho do Brasil...
+        </div>
+      </main>
+    );
+  }
+
+  // Tela de Login e Senha obrigatória antes de mostrar o jogo
+  if (!player) {
+    return (
+      <main className="min-h-screen bg-gradient-to-b from-emerald-950 via-green-950 to-blue-950 text-amber-50 flex flex-col items-center justify-center p-6">
+        <div className="w-full max-w-md rounded-2xl border-2 border-yellow-400/60 bg-emerald-950/95 p-6 shadow-2xl shadow-blue-950/80 space-y-5">
+          <div className="text-center space-y-1 border-b border-yellow-400/25 pb-4">
+            <h1 className="text-2xl font-extrabold tracking-wide text-yellow-300">
+              🇧🇷 Tigrinho do Brasil
+            </h1>
+            <p className="text-xs text-emerald-200/85">
+              Faça login com e-mail e senha ou cadastre-se para liberar o jogo
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 rounded-xl bg-blue-950/85 p-1 border border-yellow-400/30">
+            <button
+              type="button"
+              onClick={() => {
+                setMode("login");
+                setStep("form");
+                setAuthError("");
+                setAuthNotice("");
+              }}
+              className={`py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
+                mode === "login"
+                  ? "bg-yellow-400 text-blue-950"
+                  : "text-emerald-100 hover:text-yellow-200"
+              }`}
+            >
+              Entrar (Login e Senha)
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMode("register");
+                setStep("form");
+                setAuthError("");
+                setAuthNotice("");
+              }}
+              className={`py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
+                mode === "register"
+                  ? "bg-yellow-400 text-blue-950"
+                  : "text-emerald-100 hover:text-yellow-200"
+              }`}
+            >
+              Cadastrar e Confirmar
+            </button>
+          </div>
+
+          {authError && (
+            <div className="rounded-lg border border-red-400/60 bg-red-950/80 px-3 py-2 text-xs font-medium text-red-200">
+              {authError}
+            </div>
+          )}
+
+          {authNotice && (
+            <div className="rounded-lg border border-yellow-400/60 bg-blue-950/90 px-3 py-2 text-xs font-medium text-yellow-200">
+              {authNotice}
+            </div>
+          )}
+
+          {mode === "login" ? (
+            <form onSubmit={handleLoginSubmit} className="space-y-4">
+              <div className="space-y-1">
+                <label className="block text-xs font-semibold text-yellow-200">E-mail</label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="seu@email.com"
+                  className="w-full rounded-lg border border-emerald-700/80 bg-blue-950/85 px-3 py-2.5 text-sm text-amber-50 placeholder:text-emerald-300/45 focus:border-yellow-400 focus:outline-none"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-semibold text-yellow-200">Senha</label>
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Sua senha"
+                  className="w-full rounded-lg border border-emerald-700/80 bg-blue-950/85 px-3 py-2.5 text-sm text-amber-50 placeholder:text-emerald-300/45 focus:border-yellow-400 focus:outline-none"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={authLoading}
+                className="w-full py-3 rounded-xl font-extrabold text-blue-950 bg-gradient-to-r from-yellow-300 via-yellow-400 to-amber-300 hover:from-yellow-200 hover:to-yellow-300 disabled:opacity-50 transition cursor-pointer shadow-lg"
+              >
+                {authLoading ? "Entrando..." : "Entrar no Tigrinho do Brasil"}
+              </button>
+            </form>
+          ) : step === "form" ? (
+            <form onSubmit={handleRequestCode} className="space-y-3">
+              <div className="space-y-1">
+                <label className="block text-xs font-semibold text-yellow-200">Nome completo</label>
+                <input
+                  type="text"
+                  required
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Ex.: José Carneiro"
+                  className="w-full rounded-lg border border-emerald-700/80 bg-blue-950/85 px-3 py-2 text-sm text-amber-50 placeholder:text-emerald-300/45 focus:border-yellow-400 focus:outline-none"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-semibold text-yellow-200">E-mail (único)</label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="seu@email.com"
+                  className="w-full rounded-lg border border-emerald-700/80 bg-blue-950/85 px-3 py-2 text-sm text-amber-50 placeholder:text-emerald-300/45 focus:border-yellow-400 focus:outline-none"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-semibold text-yellow-200">
+                  Telefone com DDD (único)
+                </label>
+                <input
+                  type="tel"
+                  required
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="(22) 99999-9999"
+                  className="w-full rounded-lg border border-emerald-700/80 bg-blue-950/85 px-3 py-2 text-sm text-amber-50 placeholder:text-emerald-300/45 focus:border-yellow-400 focus:outline-none"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-semibold text-yellow-200">
+                  Senha (mínimo 6 caracteres)
+                </label>
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Crie uma senha"
+                  className="w-full rounded-lg border border-emerald-700/80 bg-blue-950/85 px-3 py-2 text-sm text-amber-50 placeholder:text-emerald-300/45 focus:border-yellow-400 focus:outline-none"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={authLoading}
+                className="w-full py-3 rounded-xl font-extrabold text-blue-950 bg-gradient-to-r from-yellow-300 via-yellow-400 to-amber-300 hover:from-yellow-200 hover:to-yellow-300 disabled:opacity-50 transition cursor-pointer shadow-lg"
+              >
+                {authLoading ? "Enviando código..." : "Enviar código de confirmação"}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleVerifyCode} className="space-y-4">
+              <div className="space-y-1">
+                <label className="block text-xs font-semibold text-yellow-200">
+                  Código de 6 dígitos enviado para {email}
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  required
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                  placeholder="000000"
+                  className="w-full rounded-lg border border-yellow-400/70 bg-blue-950/85 px-3 py-2.5 text-center text-lg font-mono tracking-widest text-yellow-300 focus:outline-none"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={authLoading}
+                className="w-full py-3 rounded-xl font-extrabold text-blue-950 bg-gradient-to-r from-yellow-300 via-yellow-400 to-amber-300 hover:from-yellow-200 hover:to-yellow-300 disabled:opacity-50 transition cursor-pointer shadow-lg"
+              >
+                {authLoading ? "Confirmando..." : "Confirmar e-mail e entrar"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setStep("form")}
+                className="w-full py-2 text-xs text-emerald-200 hover:text-yellow-200 cursor-pointer"
+              >
+                Voltar e alterar dados
+              </button>
+            </form>
+          )}
+        </div>
+      </main>
+    );
+  }
+
+  // Jogo só aparece após autenticar
   return (
     <main className="min-h-screen bg-gradient-to-b from-emerald-950 via-green-950 to-blue-950 text-amber-50 flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-md rounded-2xl border-2 border-yellow-400/60 bg-emerald-950/90 p-6 shadow-2xl shadow-blue-950/70 space-y-6">
@@ -312,21 +654,30 @@ export default function HomePage() {
             <h1 className="text-xl font-extrabold tracking-wide text-yellow-300">
               🇧🇷 Tigrinho do Brasil
             </h1>
-            <p className="text-xs text-emerald-200/80">Jogador: {username}</p>
+            <p className="text-xs text-emerald-200/80">
+              Jogador: {player.full_name || player.username}
+            </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setMuted((m) => !m)}
               className="rounded-lg border border-blue-400/50 bg-blue-900/70 px-2.5 py-1.5 text-xs font-medium text-yellow-200 hover:bg-blue-800/80 cursor-pointer"
               title={muted ? "Ativar som" : "Silenciar som"}
             >
-              {muted ? "🔇 Som Off" : "🔊 Som On"}
+              {muted ? "🔇" : "🔊"}
             </button>
-            <div className="text-right">
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="rounded-lg border border-yellow-400/40 bg-blue-950/80 px-2.5 py-1.5 text-xs font-semibold text-yellow-200 hover:border-yellow-300 cursor-pointer"
+            >
+              Sair
+            </button>
+            <div className="text-right pl-1">
               <span className="block text-xs text-yellow-200/80">Saldo</span>
               <strong className="text-lg font-mono text-yellow-300">
-                {loadingPlayer || !player ? "..." : formatBRL(player.balance_cents)}
+                {formatBRL(player.balance_cents)}
               </strong>
             </div>
           </div>
@@ -389,7 +740,7 @@ export default function HomePage() {
         <button
           type="button"
           onClick={handleSpin}
-          disabled={spinning || loadingPlayer}
+          disabled={spinning}
           className="w-full py-3 rounded-xl font-extrabold text-blue-950 bg-gradient-to-r from-yellow-300 via-yellow-400 to-amber-300 hover:from-yellow-200 hover:to-yellow-300 disabled:opacity-50 transition cursor-pointer shadow-lg"
         >
           {spinning ? "Girando..." : `Girar (${formatBRL(betCents)})`}
