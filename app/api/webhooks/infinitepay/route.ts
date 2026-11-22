@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, ensureAuthTables, pool } from "@/lib/db";
-import { ensureInfinitePayDepositsTable } from "@/app/api/deposit/infinitepay/route";
+import { ensureInfinitePayDepositsTable } from "@/lib/deposits-db";
 
 const DEFAULT_HANDLE = "jose-filgueiras-hi7";
 const DEFAULT_API_KEY = "inchk_9FZde3PuXnU-rba388Rb4bKkxJAjBYKuIRKyEdWoXKA";

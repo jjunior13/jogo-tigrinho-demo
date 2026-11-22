@@ -5,36 +5,7 @@ import { getOrCreatePlayer } from "@/lib/game-db";
 
 const CPF_PIX_KEY = "08391656764";
 
-export async function ensurePixDepositsTable() {
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS pix_deposits (
-      id SERIAL PRIMARY KEY,
-      player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-      txid VARCHAR(64) NOT NULL UNIQUE,
-      external_reference VARCHAR(120),
-      mp_payment_id VARCHAR(120) UNIQUE,
-      amount_cents BIGINT NOT NULL,
-      pix_key VARCHAR(120) NOT NULL,
-      pix_copy_paste TEXT NOT NULL,
-      status VARCHAR(24) NOT NULL DEFAULT 'PENDING',
-      paid_at TIMESTAMPTZ,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `);
-
-  await db.query(`
-    ALTER TABLE pix_deposits
-    ADD COLUMN IF NOT EXISTS external_reference VARCHAR(120),
-    ADD COLUMN IF NOT EXISTS mp_payment_id VARCHAR(120),
-    ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ
-  `);
-
-  await db.query(`
-    CREATE UNIQUE INDEX IF NOT EXISTS pix_deposits_mp_payment_id_idx
-    ON pix_deposits (mp_payment_id)
-    WHERE mp_payment_id IS NOT NULL
-  `);
-}
+import { ensurePixDepositsTable } from "@/lib/deposits-db";
 
 export async function POST(req: Request) {
   try {

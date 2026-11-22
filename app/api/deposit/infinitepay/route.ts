@@ -6,25 +6,7 @@ import { getOrCreatePlayer } from "@/lib/game-db";
 const DEFAULT_HANDLE = "jose-filgueiras-hi7";
 const DEFAULT_API_KEY = "inchk_9FZde3PuXnU-rba388Rb4bKkxJAjBYKuIRKyEdWoXKA";
 
-export async function ensureInfinitePayDepositsTable() {
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS infinitepay_deposits (
-      id SERIAL PRIMARY KEY,
-      player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-      order_nsu VARCHAR(64) NOT NULL UNIQUE,
-      amount_cents BIGINT NOT NULL,
-      paid_amount_cents BIGINT,
-      checkout_url TEXT,
-      transaction_nsu VARCHAR(120),
-      invoice_slug VARCHAR(120),
-      capture_method VARCHAR(32),
-      receipt_url TEXT,
-      status VARCHAR(24) NOT NULL DEFAULT 'PENDING',
-      paid_at TIMESTAMPTZ,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `);
-}
+import { ensureInfinitePayDepositsTable } from "@/lib/deposits-db";
 
 function normalizeBrPhone(phone?: string | null): string | undefined {
   if (!phone) return undefined;
@@ -69,10 +51,10 @@ export async function POST(req: NextRequest) {
     const customer: Record<string, string> = {
       name: (player.full_name || player.username || "Jogador").trim(),
     };
-    if (player.email) customer.email = player.email.trim();
+    if (player.email && player.email.includes("@")) customer.email = player.email.trim();
     if (customerPhone) customer.phone_number = customerPhone;
 
-    const payload = {
+    const payload: Record<string, unknown> = {
       handle,
       order_nsu: orderNsu,
       items: [
@@ -91,20 +73,41 @@ export async function POST(req: NextRequest) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Accept: "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(payload),
       cache: "no-store",
     });
 
-    const mpData = await mpRes.json().catch(() => ({}));
-    const checkoutUrl = typeof mpData?.checkout_url === "string" ? mpData.checkout_url : "";
+    const rawText = await mpRes.text();
+    let mpData: Record<string, unknown> = {};
+    try {
+      mpData = JSON.parse(rawText) as Record<string, unknown>;
+    } catch {
+      mpData = {};
+    }
+
+    const checkoutUrl =
+      typeof mpData?.checkout_url === "string"
+        ? mpData.checkout_url
+        : typeof mpData?.url === "string"
+          ? mpData.url
+          : typeof mpData?.link === "string"
+            ? mpData.link
+            : "";
 
     if (!mpRes.ok || !checkoutUrl) {
+      const apiDetail =
+        typeof mpData?.message === "string"
+          ? mpData.message
+          : typeof mpData?.error === "string"
+            ? mpData.error
+            : rawText.slice(0, 220);
       return NextResponse.json(
         {
           ok: false,
-          error: mpData?.message || mpData?.error || "Não foi possível gerar o link de pagamento InfinitePay.",
+          error: `InfinitePay (${mpRes.status}): ${apiDetail || "resposta sem checkout_url"}`,
         },
         { status: 502 }
       );
