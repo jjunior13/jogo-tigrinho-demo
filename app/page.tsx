@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import LoginScreen, { AuthenticatedPlayer } from "@/components/LoginScreen";
 
 type SymbolId = "tiger" | "ingot" | "bag" | "lantern" | "envelope" | "orange";
 
@@ -29,6 +30,7 @@ const SYMBOL_MAP: Record<SymbolId, SymbolConfig> = SYMBOLS.reduce(
 
 const BET_STEPS = [5, 10, 20, 50, 100, 200, 500];
 const AUTO_OPTIONS = [5, 10, 25, 50];
+const STORAGE_KEY = "tigrinho_brasil_player_v1";
 
 const PAYLINES: { name: string; cells: [number, number, number] }[] = [
   { name: "Linha Superior", cells: [0, 1, 2] },
@@ -155,6 +157,8 @@ function createInitialColumns(): [ReelColumnState, ReelColumnState, ReelColumnSt
 }
 
 export default function TigrinhoBrasilPage() {
+  const [player, setPlayer] = useState<AuthenticatedPlayer | null>(null);
+  const [sessionReady, setSessionReady] = useState<boolean>(false);
   const [balance, setBalance] = useState<number>(1000);
   const [betIndex, setBetIndex] = useState<number>(2);
   const [columns, setColumns] = useState<[ReelColumnState, ReelColumnState, ReelColumnState]>(createInitialColumns);
@@ -183,6 +187,27 @@ export default function TigrinhoBrasilPage() {
   const stopAudioRef = useRef<HTMLAudioElement | null>(null);
   const winAudioRef = useRef<HTMLAudioElement | null>(null);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const saved = window.localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved) as AuthenticatedPlayer;
+        if (parsed && parsed.email) {
+          setPlayer(parsed);
+          if (typeof parsed.balance === "number") {
+            setBalance(parsed.balance);
+            balanceRef.current = parsed.balance;
+          }
+        }
+      }
+    } catch {
+      // Ignora erro de leitura local
+    } finally {
+      setSessionReady(true);
+    }
+  }, []);
+
   useEffect(() => { soundEnabledRef.current = soundEnabled; }, [soundEnabled]);
   useEffect(() => { autoSpinsRef.current = autoSpinsLeft; }, [autoSpinsLeft]);
   useEffect(() => { balanceRef.current = balance; }, [balance]);
@@ -196,22 +221,51 @@ export default function TigrinhoBrasilPage() {
     winAudioRef.current = new Audio(createToneWavDataUri(660, 0.22, 0.45));
   }, []);
 
+  const handleAuthenticated = (loggedPlayer: AuthenticatedPlayer) => {
+    const startBal = typeof loggedPlayer.balance === "number" ? loggedPlayer.balance : 1000;
+    const normalized: AuthenticatedPlayer = { ...loggedPlayer, balance: startBal };
+    setPlayer(normalized);
+    setBalance(startBal);
+    balanceRef.current = startBal;
+    setStatusBanner(`Bem-vindo, ${normalized.name}! Toque em GIRAR`);
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+      } catch {}
+    }
+  };
+
+  const clearTimers = () => {
+    intervalsRef.current.forEach((id) => window.clearInterval(id));
+    timeoutsRef.current.forEach((id) => window.clearTimeout(id));
+    intervalsRef.current = [];
+    timeoutsRef.current = [];
+  };
+
+  const handleLogout = () => {
+    if (isSpinning) return;
+    setAutoSpinsLeft(0);
+    autoSpinsRef.current = 0;
+    clearTimers();
+    setPlayer(null);
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage.removeItem(STORAGE_KEY);
+      } catch {}
+    }
+  };
+
   const unlockAudio = useCallback(async () => {
     if (!soundEnabledRef.current || typeof window === "undefined") return null;
     const AudioCtx =
       window.AudioContext ||
       (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AudioCtx) return null;
-
-    if (!audioCtxRef.current) {
-      audioCtxRef.current = new AudioCtx();
-    }
+    if (!audioCtxRef.current) audioCtxRef.current = new AudioCtx();
     if (audioCtxRef.current.state === "suspended") {
       try {
         await audioCtxRef.current.resume();
-      } catch {
-        // Ignora bloqueio temporário
-      }
+      } catch {}
     }
     return audioCtxRef.current;
   }, []);
@@ -221,12 +275,8 @@ export default function TigrinhoBrasilPage() {
     try {
       el.currentTime = 0;
       const promise = el.play();
-      if (promise && typeof promise.catch === "function") {
-        promise.catch(() => {});
-      }
-    } catch {
-      // Ignora erro
-    }
+      if (promise && typeof promise.catch === "function") promise.catch(() => {});
+    } catch {}
   };
 
   const playReelTick = useCallback((colIndex: number) => {
@@ -299,7 +349,6 @@ export default function TigrinhoBrasilPage() {
     const next = !soundEnabled;
     setSoundEnabled(next);
     soundEnabledRef.current = next;
-
     if (next) {
       const ctx = await unlockAudio();
       if (ctx && ctx.state === "running") {
@@ -320,19 +369,10 @@ export default function TigrinhoBrasilPage() {
     }
   };
 
-  const clearTimers = () => {
-    intervalsRef.current.forEach((id) => window.clearInterval(id));
-    timeoutsRef.current.forEach((id) => window.clearTimeout(id));
-    intervalsRef.current = [];
-    timeoutsRef.current = [];
-  };
-
   useEffect(() => {
     return () => {
       clearTimers();
-      if (audioCtxRef.current) {
-        audioCtxRef.current.close().catch(() => {});
-      }
+      if (audioCtxRef.current) audioCtxRef.current.close().catch(() => {});
     };
   }, []);
 
@@ -342,20 +382,18 @@ export default function TigrinhoBrasilPage() {
     [SymbolId, SymbolId, SymbolId]
   ] => {
     const grid: SymbolId[] = Array.from({ length: 9 }, () => pickWeightedSymbol());
-    const forceHit = Math.random() < 0.24;
-
-    if (forceHit) {
+    if (Math.random() < 0.24) {
       const chosenLine = PAYLINES[Math.floor(Math.random() * PAYLINES.length)];
       const chosenSymbol = pickWeightedSymbol();
       chosenLine.cells.forEach((cellIndex) => {
         grid[cellIndex] = chosenSymbol;
       });
     }
-
-    const col0: [SymbolId, SymbolId, SymbolId] = [grid[0], grid[3], grid[6]];
-    const col1: [SymbolId, SymbolId, SymbolId] = [grid[1], grid[4], grid[7]];
-    const col2: [SymbolId, SymbolId, SymbolId] = [grid[2], grid[5], grid[8]];
-    return [col0, col1, col2];
+    return [
+      [grid[0], grid[3], grid[6]],
+      [grid[1], grid[4], grid[7]],
+      [grid[2], grid[5], grid[8]],
+    ];
   };
 
   const startSingleSpin = useCallback(
@@ -395,7 +433,6 @@ export default function TigrinhoBrasilPage() {
       ([0, 1, 2] as const).forEach((colIdx) => {
         const intervalId = window.setInterval(() => {
           playReelTick(colIdx);
-
           setColumns((prev) => {
             const next = [...prev] as [ReelColumnState, ReelColumnState, ReelColumnState];
             if (!next[colIdx].spinning) return prev;
@@ -409,11 +446,7 @@ export default function TigrinhoBrasilPage() {
               if (!next[colIdx].spinning) return prev;
               const incoming = pickWeightedSymbol();
               const [, s0, s1] = next[colIdx].strip;
-              next[colIdx] = {
-                ...next[colIdx],
-                strip: [incoming, incoming, s0, s1],
-                stepping: false,
-              };
+              next[colIdx] = { ...next[colIdx], strip: [incoming, incoming, s0, s1], stepping: false };
               return next;
             });
           }, Math.max(35, stepMs - 25));
@@ -443,7 +476,6 @@ export default function TigrinhoBrasilPage() {
                 next[0].strip[2], next[1].strip[2], next[2].strip[2],
                 next[0].strip[3], next[1].strip[3], next[2].strip[3],
               ];
-
               const result = evaluateGrid(flatGrid, currentBet);
               if (result.winAmount > 0) {
                 const updatedBal = balanceRef.current + result.winAmount;
@@ -462,7 +494,6 @@ export default function TigrinhoBrasilPage() {
                 const remaining = autoSpinsRef.current - 1;
                 autoSpinsRef.current = remaining;
                 setAutoSpinsLeft(remaining);
-
                 if (remaining > 0 && balanceRef.current >= betRef.current) {
                   const autoNextId = window.setTimeout(() => {
                     startSingleSpin(true);
@@ -474,7 +505,6 @@ export default function TigrinhoBrasilPage() {
                 }
               }
             }
-
             return next;
           });
         }, stopDelays[colIdx]);
@@ -503,11 +533,7 @@ export default function TigrinhoBrasilPage() {
   };
 
   const handleStartAuto = (count: number) => {
-    if (isSpinning || autoSpinsLeft > 0) return;
-    if (balance < bet) {
-      setStatusBanner("Saldo insuficiente para iniciar o AUTO.");
-      return;
-    }
+    if (isSpinning || autoSpinsLeft > 0 || balance < bet) return;
     autoSpinsRef.current = count;
     setAutoSpinsLeft(count);
     startSingleSpin(true);
@@ -532,6 +558,18 @@ export default function TigrinhoBrasilPage() {
     setStatusBanner("Saldo demo recarregado para 1.000!");
   };
 
+  if (!sessionReady) {
+    return (
+      <main className="min-h-screen bg-gradient-to-b from-emerald-900 via-blue-950 to-emerald-950 text-yellow-200 flex items-center justify-center p-4">
+        <p className="text-sm font-bold animate-pulse">Carregando sessão do Tigrinho Brasil...</p>
+      </main>
+    );
+  }
+
+  if (!player) {
+    return <LoginScreen onAuthenticated={handleAuthenticated} />;
+  }
+
   return (
     <main className="min-h-screen bg-gradient-to-b from-emerald-900 via-blue-950 to-emerald-950 text-yellow-50 flex flex-col items-center justify-center p-4 select-none">
       <style jsx global>{`
@@ -555,7 +593,7 @@ export default function TigrinhoBrasilPage() {
         <header className="flex items-center justify-between gap-2 border-b border-yellow-400/25 pb-3">
           <div>
             <p className="text-[11px] uppercase tracking-widest text-yellow-300 font-bold">
-              🇧🇷 Verde • Amarelo • Azul
+              🇧🇷 {player.name}
             </p>
             <h1 className="text-xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 via-yellow-400 to-sky-300">
               🐯 Tigrinho Brasil
@@ -580,13 +618,22 @@ export default function TigrinhoBrasilPage() {
               type="button"
               onClick={() => setTurbo((t) => !t)}
               disabled={isSpinning || autoSpinsLeft > 0}
-              className={`px-3 py-1.5 rounded-full text-xs font-bold border transition ${
+              className={`px-2.5 py-1.5 rounded-full text-xs font-bold border transition ${
                 turbo
                   ? "bg-yellow-400 text-blue-950 border-yellow-200"
                   : "bg-blue-900/80 text-yellow-300 border-yellow-400/35 hover:bg-blue-800"
               }`}
             >
               ⚡ TURBO
+            </button>
+
+            <button
+              type="button"
+              onClick={handleLogout}
+              disabled={isSpinning}
+              className="px-2.5 py-1.5 rounded-full text-xs font-bold bg-blue-950 text-sky-200 border border-sky-700/70 hover:bg-blue-900 disabled:opacity-40"
+            >
+              Sair
             </button>
           </div>
         </header>
