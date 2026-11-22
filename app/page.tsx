@@ -472,9 +472,15 @@ setPlayer(data.player);
         return;
       }
       setStep("code");
-      setAuthNotice(
-        "Enviamos uma mensagem de boas-vindas com o código de 6 dígitos para o seu e-mail."
-      );
+      if (data?.devCode) {
+        const receivedCode = String(data.devCode);
+        setDevCode(receivedCode);
+        setCode(receivedCode);
+        setAuthNotice(`SMTP bloqueado na Vercel — código de teste gerado: ${receivedCode}`);
+      } else {
+        setDevCode(null);
+        setAuthNotice("Enviamos uma mensagem de boas-vindas com o código de 6 dígitos para o seu e-mail.");
+      }
     } catch {
       setAuthError("Erro de rede ao solicitar código.");
     } finally {
@@ -705,7 +711,6 @@ setPlayer(data.player);
 
           {mode === "login" ? (
             <form onSubmit={handleLoginSubmit} className="space-y-4">
-{devCode && (<div style={{ margin: "10px 0", padding: "10px", borderRadius: "8px", background: "#fef08a", color: "#064e3b", fontWeight: "bold", textAlign: "center" }}>SMTP indisponível na Vercel — Código de teste: {devCode}</div>)}
               <div className="space-y-1">
                 <label className="block text-xs font-semibold text-yellow-200">E-mail</label>
                 <input
@@ -803,6 +808,11 @@ setPlayer(data.player);
             </form>
           ) : (
             <form onSubmit={handleVerifyCode} className="space-y-4">
+              {devCode && (
+                <div className="rounded-lg border border-yellow-400 bg-yellow-300/95 px-3 py-2 text-center text-xs font-extrabold text-emerald-950">
+                  SMTP indisponível na Vercel — Código de teste: <span className="font-mono text-sm tracking-widest">{devCode}</span>
+                </div>
+              )}
               <div className="space-y-1">
                 <label className="block text-xs font-semibold text-yellow-200">
                   Código de 6 dígitos enviado para {email}
