@@ -50,6 +50,10 @@ function useSlotSound() {
     return ctxRef.current;
   }, []);
 
+  const unlockAudio = useCallback(() => {
+    getContext();
+  }, [getContext]);
+
   const playReelTick = useCallback(
     (pitchMultiplier = 1) => {
       const ctx = getContext();
@@ -129,7 +133,7 @@ function useSlotSound() {
     osc.stop(now + 0.18);
   }, [getContext]);
 
-  return { playReelTick, playReelStop, playWinFanfare, playLossSound };
+  return { unlockAudio, playReelTick, playReelStop, playWinFanfare, playLossSound };
 }
 
 interface ReelState {
@@ -173,7 +177,7 @@ export default function HomePage() {
   const [spinning, setSpinning] = useState<boolean>(false);
   const [muted, setMuted] = useState<boolean>(false);
 
-  const { playReelTick, playReelStop, playWinFanfare, playLossSound } = useSlotSound();
+  const { unlockAudio, playReelTick, playReelStop, playWinFanfare, playLossSound } = useSlotSound();
 
   const loadPlayerData = useCallback(async () => {
     setLoadingPlayer(true);
@@ -202,6 +206,9 @@ export default function HomePage() {
 
   async function handleSpin() {
     if (spinning) return;
+    if (!muted) {
+      unlockAudio();
+    }
     setSpinning(true);
     setLastMessage("Girando...");
 
@@ -298,32 +305,34 @@ export default function HomePage() {
   }
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center p-6">
-      <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-xl space-y-6">
-        <div className="flex items-center justify-between">
+    <main className="min-h-screen bg-gradient-to-b from-emerald-950 via-green-950 to-blue-950 text-amber-50 flex flex-col items-center justify-center p-6">
+      <div className="w-full max-w-md rounded-2xl border-2 border-yellow-400/60 bg-emerald-950/90 p-6 shadow-2xl shadow-blue-950/70 space-y-6">
+        <div className="flex items-center justify-between border-b border-yellow-400/25 pb-4">
           <div>
-            <h1 className="text-xl font-bold text-amber-400">Jogo do Tigrinho (Demo)</h1>
-            <p className="text-xs text-zinc-400">Jogador: {username}</p>
+            <h1 className="text-xl font-extrabold tracking-wide text-yellow-300">
+              🇧🇷 Tigrinho do Brasil
+            </h1>
+            <p className="text-xs text-emerald-200/80">Jogador: {username}</p>
           </div>
           <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={() => setMuted((m) => !m)}
-              className="rounded-lg border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 hover:border-amber-500/60 cursor-pointer"
+              className="rounded-lg border border-blue-400/50 bg-blue-900/70 px-2.5 py-1.5 text-xs font-medium text-yellow-200 hover:bg-blue-800/80 cursor-pointer"
               title={muted ? "Ativar som" : "Silenciar som"}
             >
               {muted ? "🔇 Som Off" : "🔊 Som On"}
             </button>
             <div className="text-right">
-              <span className="block text-xs text-zinc-400">Saldo</span>
-              <strong className="text-lg font-mono text-emerald-400">
+              <span className="block text-xs text-yellow-200/80">Saldo</span>
+              <strong className="text-lg font-mono text-yellow-300">
                 {loadingPlayer || !player ? "..." : formatBRL(player.balance_cents)}
               </strong>
             </div>
           </div>
         </div>
 
-        <div className="relative grid grid-cols-3 gap-2 rounded-xl bg-zinc-950 p-4 border border-zinc-800 overflow-hidden">
+        <div className="relative grid grid-cols-3 gap-2 rounded-xl bg-blue-950/85 p-4 border-2 border-yellow-400/50 overflow-hidden">
           {reels.map((reel, colIdx) => (
             <div key={colIdx} className="flex flex-col gap-2 overflow-hidden">
               {reel.symbols.map((symbol, rowIdx) => {
@@ -341,8 +350,8 @@ export default function HomePage() {
                     }}
                     className={`h-20 flex items-center justify-center rounded-lg text-3xl border select-none ${
                       isMiddleRow
-                        ? "border-amber-500/70 bg-amber-500/10"
-                        : "border-zinc-800 bg-zinc-900/70"
+                        ? "border-yellow-400 bg-yellow-400/20 shadow-inner"
+                        : "border-emerald-700/60 bg-emerald-900/65"
                     }`}
                   >
                     {symbol}
@@ -354,7 +363,7 @@ export default function HomePage() {
         </div>
 
         <div className="space-y-2">
-          <span className="block text-xs text-zinc-400">Valor da aposta</span>
+          <span className="block text-xs font-medium text-yellow-200/90">Valor da aposta</span>
           <div className="grid grid-cols-4 gap-2">
             {BET_OPTIONS.map((amount) => {
               const active = betCents === amount;
@@ -364,10 +373,10 @@ export default function HomePage() {
                   type="button"
                   onClick={() => setBetCents(amount)}
                   disabled={spinning}
-                  className={`py-2 rounded-lg text-xs font-semibold border transition ${
+                  className={`py-2 rounded-lg text-xs font-bold border transition cursor-pointer ${
                     active
-                      ? "bg-amber-500 text-zinc-950 border-amber-400"
-                      : "bg-zinc-950 text-zinc-300 border-zinc-800 hover:border-zinc-700"
+                      ? "bg-yellow-400 text-blue-950 border-yellow-300 shadow"
+                      : "bg-blue-950/75 text-emerald-100 border-emerald-700/70 hover:border-yellow-400/60"
                   }`}
                 >
                   {formatBRL(amount)}
@@ -381,34 +390,34 @@ export default function HomePage() {
           type="button"
           onClick={handleSpin}
           disabled={spinning || loadingPlayer}
-          className="w-full py-3 rounded-xl font-bold text-zinc-950 bg-amber-400 hover:bg-amber-300 disabled:opacity-50 transition cursor-pointer"
+          className="w-full py-3 rounded-xl font-extrabold text-blue-950 bg-gradient-to-r from-yellow-300 via-yellow-400 to-amber-300 hover:from-yellow-200 hover:to-yellow-300 disabled:opacity-50 transition cursor-pointer shadow-lg"
         >
           {spinning ? "Girando..." : `Girar (${formatBRL(betCents)})`}
         </button>
 
-        <p className="text-sm text-center text-zinc-300 bg-zinc-950/80 border border-zinc-800/80 rounded-lg py-2 px-3">
+        <p className="text-sm text-center text-yellow-100 bg-blue-950/80 border border-yellow-400/35 rounded-lg py-2 px-3">
           {lastMessage}
         </p>
 
         <div className="space-y-2">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-yellow-300/90">
             Últimas rodadas
           </h2>
           {recentSpins.length === 0 ? (
-            <p className="text-xs text-zinc-500">Nenhuma rodada registrada ainda.</p>
+            <p className="text-xs text-emerald-200/70">Nenhuma rodada registrada ainda.</p>
           ) : (
             <ul className="space-y-1.5 max-h-44 overflow-y-auto text-xs">
               {recentSpins.map((s) => (
                 <li
                   key={s.id}
-                  className="flex items-center justify-between rounded-lg bg-zinc-950 border border-zinc-800/70 px-3 py-2"
+                  className="flex items-center justify-between rounded-lg bg-blue-950/75 border border-emerald-700/60 px-3 py-2"
                 >
-                  <span className="font-mono text-zinc-300">
+                  <span className="font-mono text-emerald-100">
                     Aposta {formatBRL(s.bet_cents)} → Prêmio {formatBRL(s.payout_cents)}
                   </span>
                   <span
-                    className={`font-semibold ${
-                      Number(s.payout_cents) > 0 ? "text-emerald-400" : "text-zinc-500"
+                    className={`font-bold ${
+                      Number(s.payout_cents) > 0 ? "text-yellow-300" : "text-emerald-300/65"
                     }`}
                   >
                     {s.outcome}
