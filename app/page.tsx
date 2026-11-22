@@ -34,18 +34,58 @@ const SYMBOLS = ["🐯", "💎", "🧧", "🪙", "🍊", "🧨"];
 const INITIAL_GRID = ["🐯", "🪙", "🧧", "🐯", "🐯", "🐯", "🍊", "🧨", "💎"];
 const BET_OPTIONS = [100, 500, 1000, 2000];
 
+const ALL_PAYLINES: {
+  id: string;
+  label: string;
+  orientation: "horizontal" | "vertical";
+  indices: [number, number, number];
+}[] = [
+  { id: "row-0", label: "Linha Topo", orientation: "horizontal", indices: [0, 1, 2] },
+  { id: "row-1", label: "Linha Meio", orientation: "horizontal", indices: [3, 4, 5] },
+  { id: "row-2", label: "Linha Base", orientation: "horizontal", indices: [6, 7, 8] },
+  { id: "col-0", label: "Coluna Esquerda", orientation: "vertical", indices: [0, 3, 6] },
+  { id: "col-1", label: "Coluna Centro", orientation: "vertical", indices: [1, 4, 7] },
+  { id: "col-2", label: "Coluna Direita", orientation: "vertical", indices: [2, 5, 8] },
+];
+
 const LINE_STYLE_MAP: Record<
   string,
   | { kind: "horizontal"; topPercent: number; colorClass: string }
   | { kind: "vertical"; leftPercent: number; colorClass: string }
 > = {
-  "row-0": { kind: "horizontal", topPercent: 18.5, colorClass: "bg-yellow-300 shadow-[0_0_12px_#fde047]" },
-  "row-1": { kind: "horizontal", topPercent: 50, colorClass: "bg-emerald-400 shadow-[0_0_12px_#34d399]" },
-  "row-2": { kind: "horizontal", topPercent: 81.5, colorClass: "bg-sky-300 shadow-[0_0_12px_#7dd3fc]" },
-  "col-0": { kind: "vertical", leftPercent: 17.5, colorClass: "bg-yellow-300 shadow-[0_0_12px_#fde047]" },
-  "col-1": { kind: "vertical", leftPercent: 50, colorClass: "bg-emerald-400 shadow-[0_0_12px_#34d399]" },
-  "col-2": { kind: "vertical", leftPercent: 82.5, colorClass: "bg-sky-300 shadow-[0_0_12px_#7dd3fc]" },
+  "row-0": { kind: "horizontal", topPercent: 18, colorClass: "bg-yellow-300 shadow-[0_0_16px_#fde047]" },
+  "row-1": { kind: "horizontal", topPercent: 50, colorClass: "bg-emerald-300 shadow-[0_0_16px_#6ee7b7]" },
+  "row-2": { kind: "horizontal", topPercent: 82, colorClass: "bg-sky-300 shadow-[0_0_16px_#7dd3fc]" },
+  "col-0": { kind: "vertical", leftPercent: 17, colorClass: "bg-yellow-300 shadow-[0_0_16px_#fde047]" },
+  "col-1": { kind: "vertical", leftPercent: 50, colorClass: "bg-emerald-300 shadow-[0_0_16px_#6ee7b7]" },
+  "col-2": { kind: "vertical", leftPercent: 83, colorClass: "bg-sky-300 shadow-[0_0_16px_#7dd3fc]" },
 };
+
+function detectWinningLinesFromGrid(grid: string[], betCents: number): WinningLineOverlay[] {
+  const found: WinningLineOverlay[] = [];
+  for (const line of ALL_PAYLINES) {
+    const [a, b, c] = line.indices.map((idx) => grid[idx]);
+    if (!a || !b || !c) continue;
+    const nonWilds = [a, b, c].filter((s) => s !== "🐯");
+    let sym = "🐯";
+    if (nonWilds.length > 0) {
+      const first = nonWilds[0];
+      if (!nonWilds.every((s) => s === first)) continue;
+      sym = first;
+    }
+    const mult = sym === "🐯" ? 10 : sym === "💎" ? 5 : sym === "🧧" ? 3 : sym === "🪙" ? 2 : sym === "🍊" ? 1.5 : 1;
+    found.push({
+      id: line.id,
+      label: line.label,
+      orientation: line.orientation,
+      indices: line.indices,
+      symbol: sym,
+      multiplier: mult,
+      payoutCents: Math.round(betCents * mult),
+    });
+  }
+  return found;
+}
 
 function formatBRL(centsStr: string | number) {
   const cents = typeof centsStr === "string" ? Number(centsStr) : centsStr;
@@ -78,7 +118,19 @@ function useSlotSound() {
   }, []);
 
   const unlockAudio = useCallback(() => {
-    getContext();
+    const ctx = getContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(660, now);
+    gain.gain.setValueAtTime(0.08, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.05);
   }, [getContext]);
 
   const playReelTick = useCallback(
@@ -86,7 +138,7 @@ function useSlotSound() {
       const ctx = getContext();
       if (!ctx) return;
       const now = ctx.currentTime;
-      const notes = [587.33, 659.25, 783.99, 880.0, 1046.5, 1174.66];
+      const notes = [659.25, 783.99, 880.0, 1046.5, 1174.66, 1318.51];
       const freq = notes[stepIndex % notes.length];
 
       const oscMain = ctx.createOscillator();
@@ -95,15 +147,15 @@ function useSlotSound() {
 
       oscMain.type = "square";
       oscMain.frequency.setValueAtTime(freq, now);
-      oscMain.frequency.exponentialRampToValueAtTime(freq * 1.35, now + 0.055);
+      oscMain.frequency.exponentialRampToValueAtTime(freq * 1.4, now + 0.06);
 
       oscSub.type = "triangle";
       oscSub.frequency.setValueAtTime(freq * 0.5, now);
-      oscSub.frequency.exponentialRampToValueAtTime(freq * 0.85, now + 0.055);
+      oscSub.frequency.exponentialRampToValueAtTime(freq * 0.9, now + 0.06);
 
-      gain.gain.setValueAtTime(0.001, now);
-      gain.gain.linearRampToValueAtTime(0.28, now + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.002, now + 0.068);
+      gain.gain.setValueAtTime(0.01, now);
+      gain.gain.linearRampToValueAtTime(0.42, now + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.003, now + 0.075);
 
       oscMain.connect(gain);
       oscSub.connect(gain);
@@ -111,8 +163,8 @@ function useSlotSound() {
 
       oscMain.start(now);
       oscSub.start(now);
-      oscMain.stop(now + 0.072);
-      oscSub.stop(now + 0.072);
+      oscMain.stop(now + 0.08);
+      oscSub.stop(now + 0.08);
     },
     [getContext]
   );
@@ -122,22 +174,22 @@ function useSlotSound() {
       const ctx = getContext();
       if (!ctx) return;
       const now = ctx.currentTime;
-      const chords = [523.25, 659.25, 783.99];
+      const chords = [587.33, 783.99, 1046.5];
       const freq = chords[colIndex % chords.length];
 
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = "triangle";
       osc.frequency.setValueAtTime(freq, now);
-      osc.frequency.exponentialRampToValueAtTime(freq * 1.2, now + 0.09);
+      osc.frequency.exponentialRampToValueAtTime(freq * 1.25, now + 0.1);
 
-      gain.gain.setValueAtTime(0.28, now);
-      gain.gain.exponentialRampToValueAtTime(0.002, now + 0.11);
+      gain.gain.setValueAtTime(0.4, now);
+      gain.gain.exponentialRampToValueAtTime(0.003, now + 0.12);
 
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start(now);
-      osc.stop(now + 0.12);
+      osc.stop(now + 0.13);
     },
     [getContext]
   );
@@ -147,13 +199,13 @@ function useSlotSound() {
     if (!ctx) return;
     const now = ctx.currentTime;
     const notes = [
-      { f: 523.25, t: 0.0, d: 0.11 },
-      { f: 659.25, t: 0.09, d: 0.11 },
-      { f: 783.99, t: 0.18, d: 0.11 },
-      { f: 1046.5, t: 0.27, d: 0.16 },
-      { f: 880.0, t: 0.43, d: 0.11 },
-      { f: 1046.5, t: 0.54, d: 0.13 },
-      { f: 1318.51, t: 0.67, d: 0.36 },
+      { f: 523.25, t: 0.0, d: 0.12 },
+      { f: 659.25, t: 0.1, d: 0.12 },
+      { f: 783.99, t: 0.2, d: 0.12 },
+      { f: 1046.5, t: 0.3, d: 0.18 },
+      { f: 880.0, t: 0.48, d: 0.12 },
+      { f: 1046.5, t: 0.6, d: 0.14 },
+      { f: 1318.51, t: 0.74, d: 0.42 },
     ];
 
     notes.forEach((n) => {
@@ -168,9 +220,9 @@ function useSlotSound() {
       osc2.type = "square";
       osc2.frequency.setValueAtTime(n.f * 1.5, start);
 
-      gain.gain.setValueAtTime(0.001, start);
-      gain.gain.linearRampToValueAtTime(0.28, start + 0.015);
-      gain.gain.exponentialRampToValueAtTime(0.002, start + n.d);
+      gain.gain.setValueAtTime(0.01, start);
+      gain.gain.linearRampToValueAtTime(0.42, start + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.003, start + n.d);
 
       osc1.connect(gain);
       osc2.connect(gain);
@@ -181,6 +233,19 @@ function useSlotSound() {
       osc1.stop(start + n.d + 0.02);
       osc2.stop(start + n.d + 0.02);
     });
+
+    try {
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+        const utter = new SpeechSynthesisUtterance("Excelente!");
+        utter.lang = "pt-BR";
+        utter.rate = 1.1;
+        utter.volume = 1;
+        window.speechSynthesis.speak(utter);
+      }
+    } catch {
+      // ignora speechSynthesis se indisponivel
+    }
   }, [getContext]);
 
   const playLossSound = useCallback(() => {
@@ -190,10 +255,10 @@ function useSlotSound() {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = "sine";
-    osc.frequency.setValueAtTime(240, now);
-    osc.frequency.exponentialRampToValueAtTime(140, now + 0.16);
-    gain.gain.setValueAtTime(0.1, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.17);
+    osc.frequency.setValueAtTime(260, now);
+    osc.frequency.exponentialRampToValueAtTime(150, now + 0.16);
+    gain.gain.setValueAtTime(0.18, now);
+    gain.gain.exponentialRampToValueAtTime(0.002, now + 0.17);
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.start(now);
@@ -449,9 +514,8 @@ export default function HomePage() {
 
   async function handleSpin() {
     if (!player || spinning) return;
-    if (!muted) {
-      unlockAudio();
-    }
+    setMuted(false);
+    unlockAudio();
     setSpinning(true);
     setWinningLines([]);
     setExcellentBanner("");
@@ -468,9 +532,7 @@ export default function HomePage() {
     let tickCount = 0;
     const tickInterval = window.setInterval(() => {
       tickCount += 1;
-      if (!muted) {
-        playReelTick(tickCount);
-      }
+      playReelTick(tickCount);
 
       setReels((prev) =>
         prev.map((r) => {
@@ -483,7 +545,7 @@ export default function HomePage() {
           };
         })
       );
-    }, 80);
+    }, 85);
 
     try {
       const minSpinPromise = new Promise((resolve) => setTimeout(resolve, 720));
@@ -509,7 +571,7 @@ export default function HomePage() {
       const finalCols = gridToColumns(finalGrid);
 
       for (let col = 0; col < 3; col++) {
-        await new Promise((resolve) => setTimeout(resolve, col === 0 ? 0 : 250));
+        await new Promise((resolve) => setTimeout(resolve, col === 0 ? 0 : 240));
         setReels((prev) =>
           prev.map((r, idx) =>
             idx === col
@@ -521,9 +583,7 @@ export default function HomePage() {
               : r
           )
         );
-        if (!muted) {
-          playReelStop(col);
-        }
+        playReelStop(col);
       }
 
       clearInterval(tickInterval);
@@ -532,21 +592,35 @@ export default function HomePage() {
         window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(data.player));
       }
 
-      const lines: WinningLineOverlay[] = Array.isArray(data.winningLines) ? data.winningLines : [];
-      setWinningLines(lines);
+      const detectedLines = detectWinningLinesFromGrid(finalGrid, betCents);
+      const apiLines: WinningLineOverlay[] = Array.isArray(data.winningLines) ? data.winningLines : [];
+      const activeLines = detectedLines.length > 0 ? detectedLines : apiLines;
+      setWinningLines(activeLines);
+
+      const payout = data.spin ? Number(data.spin.payout_cents) : 0;
+      const computedPayout =
+        payout > 0
+          ? payout
+          : activeLines.reduce((acc, item) => acc + Number(item.payoutCents || 0), 0);
+
+      if (computedPayout > 0 || activeLines.length > 0) {
+        const displayAmount = computedPayout > 0 ? computedPayout : betCents;
+        const lineNames = activeLines.map((l) => l.label).join(", ");
+        setExcellentBanner(`Excelente! Ganhou ${formatBRL(displayAmount)}`);
+        setLastMessage(
+          `Excelente! Sequência em ${lineNames || "grade"} — Prêmio de ${formatBRL(displayAmount)}.`
+        );
+        playWinFanfare();
+      } else {
+        setExcellentBanner("");
+        setLastMessage(
+          `Sem sequência na horizontal ou vertical (${data.spin?.outcome || "Sem sequencia"}).`,
+        );
+        playLossSound();
+      }
 
       if (data.spin) {
         setRecentSpins((prev) => [data.spin, ...prev].slice(0, 10));
-        const payout = Number(data.spin.payout_cents);
-        if (payout > 0) {
-          setExcellentBanner(`Excelente! Ganhou ${formatBRL(payout)}`);
-          setLastMessage(`Excelente! Prêmio de ${formatBRL(payout)} (${data.spin.outcome}).`);
-          if (!muted) playWinFanfare();
-        } else {
-          setExcellentBanner("");
-          setLastMessage(`Sem sequência na horizontal ou vertical (${data.spin.outcome}).`);
-          if (!muted) playLossSound();
-        }
       }
     } catch {
       clearInterval(tickInterval);
@@ -786,7 +860,11 @@ export default function HomePage() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setMuted((m) => !m)}
+              onClick={() => {
+                const next = !muted;
+                setMuted(next);
+                if (!next) unlockAudio();
+              }}
               className="rounded-lg border border-blue-400/50 bg-blue-900/70 px-2.5 py-1.5 text-xs font-medium text-yellow-200 hover:bg-blue-800/80 cursor-pointer"
               title={muted ? "Ativar som" : "Silenciar som"}
             >
@@ -810,8 +888,8 @@ export default function HomePage() {
 
         {excellentBanner && (
           <div className="rounded-xl border-2 border-yellow-300 bg-gradient-to-r from-emerald-800 via-green-700 to-blue-900 px-4 py-3 text-center shadow-lg">
-            <span className="block text-xl font-black tracking-wider text-yellow-300 uppercase">
-              🎉 Excelente 🎉
+            <span className="block text-2xl font-black tracking-wider text-yellow-300 uppercase">
+              🎉 Excelente! 🎉
             </span>
             <span className="block text-xs font-bold text-amber-100 mt-0.5">{excellentBanner}</span>
           </div>
@@ -832,12 +910,12 @@ export default function HomePage() {
                         ? `translateY(${reel.dropOffset ? "10px" : "-10px"})`
                         : "translateY(0px)",
                       transition: reel.spinning
-                        ? "transform 80ms linear"
+                        ? "transform 85ms linear"
                         : "transform 180ms cubic-bezier(0.22, 1, 0.36, 1)",
                     }}
                     className={`h-20 flex items-center justify-center rounded-lg text-3xl border select-none ${
                       isWinningCell
-                        ? "border-yellow-300 bg-yellow-400/35 ring-2 ring-yellow-300 shadow-lg"
+                        ? "border-yellow-300 bg-yellow-400/40 ring-2 ring-yellow-300 shadow-lg"
                         : isMiddleRow
                         ? "border-yellow-400/70 bg-yellow-400/15 shadow-inner"
                         : "border-emerald-700/60 bg-emerald-900/65"
@@ -851,7 +929,7 @@ export default function HomePage() {
           ))}
 
           {!spinning && winningLines.length > 0 && (
-            <div className="pointer-events-none absolute inset-4 z-10">
+            <div className="pointer-events-none absolute inset-4 z-20">
               {winningLines.map((line) => {
                 const styleCfg = LINE_STYLE_MAP[line.id];
                 if (!styleCfg) return null;
@@ -860,7 +938,7 @@ export default function HomePage() {
                     <div
                       key={line.id}
                       style={{ top: `${styleCfg.topPercent}%` }}
-                      className={`absolute left-2 right-2 h-1.5 -translate-y-1/2 rounded-full ${styleCfg.colorClass}`}
+                      className={`absolute left-1 right-1 h-2 -translate-y-1/2 rounded-full ${styleCfg.colorClass}`}
                     />
                   );
                 }
@@ -868,7 +946,7 @@ export default function HomePage() {
                   <div
                     key={line.id}
                     style={{ left: `${styleCfg.leftPercent}%` }}
-                    className={`absolute top-2 bottom-2 w-1.5 -translate-x-1/2 rounded-full ${styleCfg.colorClass}`}
+                    className={`absolute top-1 bottom-1 w-2 -translate-x-1/2 rounded-full ${styleCfg.colorClass}`}
                   />
                 );
               })}

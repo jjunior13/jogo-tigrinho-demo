@@ -42,10 +42,10 @@ export interface WinningLineResult {
 
 function randomWeightedSymbol(): GameSymbol {
   const r = Math.random();
-  if (r < 0.09) return "🐯";
-  if (r < 0.2) return "💎";
-  if (r < 0.36) return "🧧";
-  if (r < 0.56) return "🪙";
+  if (r < 0.10) return "🐯";
+  if (r < 0.22) return "💎";
+  if (r < 0.38) return "🧧";
+  if (r < 0.58) return "🪙";
   if (r < 0.78) return "🍊";
   return "🧨";
 }
@@ -103,7 +103,7 @@ function generateGrid(betCents: number) {
     };
   }
 
-  if (roll < 0.4) {
+  if (roll < 0.48) {
     const chosenLine = PAYLINES[Math.floor(Math.random() * PAYLINES.length)];
     const lineSymbol = randomWeightedSymbol();
     const grid: GameSymbol[] = Array.from({ length: 9 }, () => "🧨");
