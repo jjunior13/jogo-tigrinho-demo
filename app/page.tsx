@@ -34,16 +34,17 @@ const SYMBOLS = ["🐯", "💎", "🧧", "🪙", "🍊", "🧨"];
 const INITIAL_GRID = ["🐯", "🪙", "🧧", "🐯", "🐯", "🐯", "🍊", "🧨", "💎"];
 const BET_OPTIONS = [100, 500, 1000, 2000];
 
-const LINE_COORDS: Record<
+const LINE_STYLE_MAP: Record<
   string,
-  { x1: number; y1: number; x2: number; y2: number; stroke: string }
+  | { kind: "horizontal"; topPercent: number; colorClass: string }
+  | { kind: "vertical"; leftPercent: number; colorClass: string }
 > = {
-  "row-0": { x1: 24, y1: 54, x2: 336, y2: 54, stroke: "#fde047" },
-  "row-1": { x1: 24, y1: 150, x2: 336, y2: 150, stroke: "#4ade80" },
-  "row-2": { x1: 24, y1: 246, x2: 336, y2: 246, stroke: "#38bdf8" },
-  "col-0": { x1: 62, y1: 20, x2: 62, y2: 280, stroke: "#fde047" },
-  "col-1": { x1: 180, y1: 20, x2: 180, y2: 280, stroke: "#4ade80" },
-  "col-2": { x1: 298, y1: 20, x2: 298, y2: 280, stroke: "#38bdf8" },
+  "row-0": { kind: "horizontal", topPercent: 18.5, colorClass: "bg-yellow-300 shadow-[0_0_12px_#fde047]" },
+  "row-1": { kind: "horizontal", topPercent: 50, colorClass: "bg-emerald-400 shadow-[0_0_12px_#34d399]" },
+  "row-2": { kind: "horizontal", topPercent: 81.5, colorClass: "bg-sky-300 shadow-[0_0_12px_#7dd3fc]" },
+  "col-0": { kind: "vertical", leftPercent: 17.5, colorClass: "bg-yellow-300 shadow-[0_0_12px_#fde047]" },
+  "col-1": { kind: "vertical", leftPercent: 50, colorClass: "bg-emerald-400 shadow-[0_0_12px_#34d399]" },
+  "col-2": { kind: "vertical", leftPercent: 82.5, colorClass: "bg-sky-300 shadow-[0_0_12px_#7dd3fc]" },
 };
 
 function formatBRL(centsStr: string | number) {
@@ -80,39 +81,38 @@ function useSlotSound() {
     getContext();
   }, [getContext]);
 
-  // Som de rolagem mais alto, encorpado e divertido (estilo marimba/arcade alegre)
   const playReelTick = useCallback(
     (stepIndex: number) => {
       const ctx = getContext();
       if (!ctx) return;
       const now = ctx.currentTime;
-      const scale = [523.25, 587.33, 659.25, 783.99, 880.0, 1046.5];
-      const baseFreq = scale[stepIndex % scale.length];
+      const notes = [587.33, 659.25, 783.99, 880.0, 1046.5, 1174.66];
+      const freq = notes[stepIndex % notes.length];
 
-      const osc1 = ctx.createOscillator();
-      const osc2 = ctx.createOscillator();
+      const oscMain = ctx.createOscillator();
+      const oscSub = ctx.createOscillator();
       const gain = ctx.createGain();
 
-      osc1.type = "triangle";
-      osc1.frequency.setValueAtTime(baseFreq, now);
-      osc1.frequency.exponentialRampToValueAtTime(baseFreq * 1.25, now + 0.055);
+      oscMain.type = "square";
+      oscMain.frequency.setValueAtTime(freq, now);
+      oscMain.frequency.exponentialRampToValueAtTime(freq * 1.35, now + 0.055);
 
-      osc2.type = "square";
-      osc2.frequency.setValueAtTime(baseFreq * 0.5, now);
-      osc2.frequency.exponentialRampToValueAtTime(baseFreq * 0.75, now + 0.055);
+      oscSub.type = "triangle";
+      oscSub.frequency.setValueAtTime(freq * 0.5, now);
+      oscSub.frequency.exponentialRampToValueAtTime(freq * 0.85, now + 0.055);
 
       gain.gain.setValueAtTime(0.001, now);
-      gain.gain.linearRampToValueAtTime(0.22, now + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.002, now + 0.065);
+      gain.gain.linearRampToValueAtTime(0.28, now + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.002, now + 0.068);
 
-      osc1.connect(gain);
-      osc2.connect(gain);
+      oscMain.connect(gain);
+      oscSub.connect(gain);
       gain.connect(ctx.destination);
 
-      osc1.start(now);
-      osc2.start(now);
-      osc1.stop(now + 0.07);
-      osc2.stop(now + 0.07);
+      oscMain.start(now);
+      oscSub.start(now);
+      oscMain.stop(now + 0.072);
+      oscSub.stop(now + 0.072);
     },
     [getContext]
   );
@@ -122,15 +122,16 @@ function useSlotSound() {
       const ctx = getContext();
       if (!ctx) return;
       const now = ctx.currentTime;
-      const stopNotes = [440, 554.37, 659.25];
+      const chords = [523.25, 659.25, 783.99];
+      const freq = chords[colIndex % chords.length];
+
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-
       osc.type = "triangle";
-      osc.frequency.setValueAtTime(stopNotes[colIndex % stopNotes.length], now);
-      osc.frequency.exponentialRampToValueAtTime(stopNotes[colIndex % stopNotes.length] * 1.15, now + 0.09);
+      osc.frequency.setValueAtTime(freq, now);
+      osc.frequency.exponentialRampToValueAtTime(freq * 1.2, now + 0.09);
 
-      gain.gain.setValueAtTime(0.24, now);
+      gain.gain.setValueAtTime(0.28, now);
       gain.gain.exponentialRampToValueAtTime(0.002, now + 0.11);
 
       osc.connect(gain);
@@ -141,45 +142,44 @@ function useSlotSound() {
     [getContext]
   );
 
-  // Fanfarra alegre e vibrante ao completar sequência na horizontal ou vertical
   const playWinFanfare = useCallback(() => {
     const ctx = getContext();
     if (!ctx) return;
     const now = ctx.currentTime;
-    const melody = [
-      { freq: 523.25, offset: 0.0, dur: 0.11 },
-      { freq: 659.25, offset: 0.09, dur: 0.11 },
-      { freq: 783.99, offset: 0.18, dur: 0.11 },
-      { freq: 1046.5, offset: 0.27, dur: 0.18 },
-      { freq: 880.0, offset: 0.44, dur: 0.12 },
-      { freq: 1046.5, offset: 0.55, dur: 0.14 },
-      { freq: 1318.5, offset: 0.68, dur: 0.34 },
+    const notes = [
+      { f: 523.25, t: 0.0, d: 0.11 },
+      { f: 659.25, t: 0.09, d: 0.11 },
+      { f: 783.99, t: 0.18, d: 0.11 },
+      { f: 1046.5, t: 0.27, d: 0.16 },
+      { f: 880.0, t: 0.43, d: 0.11 },
+      { f: 1046.5, t: 0.54, d: 0.13 },
+      { f: 1318.51, t: 0.67, d: 0.36 },
     ];
 
-    melody.forEach((n) => {
-      const start = now + n.offset;
-      const osc = ctx.createOscillator();
-      const harm = ctx.createOscillator();
+    notes.forEach((n) => {
+      const start = now + n.t;
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
       const gain = ctx.createGain();
 
-      osc.type = "triangle";
-      osc.frequency.setValueAtTime(n.freq, start);
+      osc1.type = "triangle";
+      osc1.frequency.setValueAtTime(n.f, start);
 
-      harm.type = "sine";
-      harm.frequency.setValueAtTime(n.freq * 1.5, start);
+      osc2.type = "square";
+      osc2.frequency.setValueAtTime(n.f * 1.5, start);
 
       gain.gain.setValueAtTime(0.001, start);
-      gain.gain.linearRampToValueAtTime(0.25, start + 0.015);
-      gain.gain.exponentialRampToValueAtTime(0.002, start + n.dur);
+      gain.gain.linearRampToValueAtTime(0.28, start + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.002, start + n.d);
 
-      osc.connect(gain);
-      harm.connect(gain);
+      osc1.connect(gain);
+      osc2.connect(gain);
       gain.connect(ctx.destination);
 
-      osc.start(start);
-      harm.start(start);
-      osc.stop(start + n.dur + 0.02);
-      harm.stop(start + n.dur + 0.02);
+      osc1.start(start);
+      osc2.start(start);
+      osc1.stop(start + n.d + 0.02);
+      osc2.stop(start + n.d + 0.02);
     });
   }, [getContext]);
 
@@ -192,7 +192,7 @@ function useSlotSound() {
     osc.type = "sine";
     osc.frequency.setValueAtTime(240, now);
     osc.frequency.exponentialRampToValueAtTime(140, now + 0.16);
-    gain.gain.setValueAtTime(0.09, now);
+    gain.gain.setValueAtTime(0.1, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.17);
     osc.connect(gain);
     gain.connect(ctx.destination);
@@ -809,11 +809,11 @@ export default function HomePage() {
         </div>
 
         {excellentBanner && (
-          <div className="rounded-xl border-2 border-yellow-300 bg-gradient-to-r from-emerald-800 via-green-700 to-blue-900 px-4 py-2.5 text-center shadow-lg animate-pulse">
-            <span className="block text-lg font-black tracking-wider text-yellow-300 uppercase">
-              🎉 Excelente! 🎉
+          <div className="rounded-xl border-2 border-yellow-300 bg-gradient-to-r from-emerald-800 via-green-700 to-blue-900 px-4 py-3 text-center shadow-lg">
+            <span className="block text-xl font-black tracking-wider text-yellow-300 uppercase">
+              🎉 Excelente 🎉
             </span>
-            <span className="block text-xs font-bold text-amber-100">{excellentBanner}</span>
+            <span className="block text-xs font-bold text-amber-100 mt-0.5">{excellentBanner}</span>
           </div>
         )}
 
@@ -851,39 +851,28 @@ export default function HomePage() {
           ))}
 
           {!spinning && winningLines.length > 0 && (
-            <svg
-              viewBox="0 0 360 300"
-              className="pointer-events-none absolute inset-0 h-full w-full p-4"
-              aria-hidden="true"
-            >
+            <div className="pointer-events-none absolute inset-4 z-10">
               {winningLines.map((line) => {
-                const coords = LINE_COORDS[line.id];
-                if (!coords) return null;
+                const styleCfg = LINE_STYLE_MAP[line.id];
+                if (!styleCfg) return null;
+                if (styleCfg.kind === "horizontal") {
+                  return (
+                    <div
+                      key={line.id}
+                      style={{ top: `${styleCfg.topPercent}%` }}
+                      className={`absolute left-2 right-2 h-1.5 -translate-y-1/2 rounded-full ${styleCfg.colorClass}`}
+                    />
+                  );
+                }
                 return (
-                  <g key={line.id}>
-                    <line
-                      x1={coords.x1}
-                      y1={coords.y1}
-                      x2={coords.x2}
-                      y2={coords.y2}
-                      stroke="#0f172a"
-                      strokeWidth="9"
-                      strokeLinecap="round"
-                      opacity="0.7"
-                    />
-                    <line
-                      x1={coords.x1}
-                      y1={coords.y1}
-                      x2={coords.x2}
-                      y2={coords.y2}
-                      stroke={coords.stroke}
-                      strokeWidth="5.5"
-                      strokeLinecap="round"
-                    />
-                  </g>
+                  <div
+                    key={line.id}
+                    style={{ left: `${styleCfg.leftPercent}%` }}
+                    className={`absolute top-2 bottom-2 w-1.5 -translate-x-1/2 rounded-full ${styleCfg.colorClass}`}
+                  />
                 );
               })}
-            </svg>
+            </div>
           )}
         </div>
 

@@ -42,35 +42,27 @@ export interface WinningLineResult {
 
 function randomWeightedSymbol(): GameSymbol {
   const r = Math.random();
-  if (r < 0.08) return "🐯";
-  if (r < 0.18) return "💎";
-  if (r < 0.34) return "🧧";
-  if (r < 0.54) return "🪙";
-  if (r < 0.77) return "🍊";
+  if (r < 0.09) return "🐯";
+  if (r < 0.2) return "💎";
+  if (r < 0.36) return "🧧";
+  if (r < 0.56) return "🪙";
+  if (r < 0.78) return "🍊";
   return "🧨";
 }
 
-function evaluateLine(
-  grid: GameSymbol[],
-  line: PaylineDef,
-  betCents: number
-): WinningLineResult | null {
+function evaluateLine(grid: GameSymbol[], line: PaylineDef, betCents: number): WinningLineResult | null {
   const [a, b, c] = line.indices.map((idx) => grid[idx]);
   const nonWilds = [a, b, c].filter((s) => s !== "🐯");
-
   let winningSymbol: GameSymbol;
   if (nonWilds.length === 0) {
     winningSymbol = "🐯";
   } else {
     const first = nonWilds[0];
-    const allMatch = nonWilds.every((s) => s === first);
-    if (!allMatch) return null;
+    if (!nonWilds.every((s) => s === first)) return null;
     winningSymbol = first;
   }
-
   const multiplier = LINE_PAYOUT_MULTIPLIER[winningSymbol];
   const payoutCents = Math.round(betCents * multiplier);
-
   return {
     id: line.id,
     label: line.label,
@@ -89,85 +81,53 @@ function hasFullGridMatch(grid: GameSymbol[]): GameSymbol | null {
   return nonWilds.every((s) => s === target) ? target : null;
 }
 
-function generateGrid(betCents: number): {
-  grid: GameSymbol[];
-  winningLines: WinningLineResult[];
-  payoutCents: number;
-  fullGridBonusCents: number;
-  outcome: string;
-} {
+function generateGrid(betCents: number) {
   const roll = Math.random();
-
-  // ~2% chance de grade completa (9 iguais com apoio de wild)
   if (roll < 0.02) {
-    const baseSym = SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
-    const grid: GameSymbol[] = Array.from({ length: 9 }, () =>
-      Math.random() < 0.35 ? "🐯" : baseSym
-    );
+    const basePool: GameSymbol[] = ["💎", "🧧", "🪙", "🍊", "🧨"];
+    const baseSym = basePool[Math.floor(Math.random() * basePool.length)];
+    const grid: GameSymbol[] = Array.from({ length: 9 }, () => (Math.random() < 0.35 ? "🐯" : baseSym));
     const winningLines = PAYLINES.map((line) => evaluateLine(grid, line, betCents)).filter(
       (x): x is WinningLineResult => x !== null
     );
     const linesSum = winningLines.reduce((acc, item) => acc + item.payoutCents, 0);
     const fullGridBonusCents = betCents * 10;
     const payoutCents = linesSum + fullGridBonusCents;
-    const labels = winningLines.map((l) => `${l.label} (${l.symbol})`).join(" + ");
+    const labels = winningLines.map((l) => l.label + " (" + l.symbol + ")").join(" + ");
     return {
       grid,
       winningLines,
       payoutCents,
       fullGridBonusCents,
-      outcome: `Grade Completa 10x + ${labels}`,
+      outcome: "Grade Completa 10x + " + labels,
     };
   }
 
-  // ~34% chance de forçar pelo menos 1 sequência horizontal ou vertical vencedora
-  if (roll < 0.36) {
+  if (roll < 0.4) {
     const chosenLine = PAYLINES[Math.floor(Math.random() * PAYLINES.length)];
     const lineSymbol = randomWeightedSymbol();
-    const grid: GameSymbol[] = Array.from({ length: 9 }, () => randomWeightedSymbol());
-
-    // Garante que não haja outras linhas acidentais extras além da escolhida (ou deixa natural se vier)
+    const grid: GameSymbol[] = Array.from({ length: 9 }, () => "🧨");
     for (const idx of chosenLine.indices) {
       grid[idx] = lineSymbol;
     }
-
     const winningLines = PAYLINES.map((line) => evaluateLine(grid, line, betCents)).filter(
       (x): x is WinningLineResult => x !== null
     );
-
     if (winningLines.length > 0) {
       const payoutCents = winningLines.reduce((acc, item) => acc + item.payoutCents, 0);
-      const outcome = winningLines
-        .map((l) => `${l.label} ${l.symbol} (${l.multiplier}x)`)
-        .join(" | ");
-      return {
-        grid,
-        winningLines,
-        payoutCents,
-        fullGridBonusCents: 0,
-        outcome,
-      };
+      const outcome = winningLines.map((l) => l.label + " " + l.symbol + " (" + l.multiplier + "x)").join(" | ");
+      return { grid, winningLines, payoutCents, fullGridBonusCents: 0, outcome };
     }
   }
 
-  // Giro aleatório padrão com avaliação de todas as linhas horizontais e verticais
   const grid: GameSymbol[] = Array.from({ length: 9 }, () => randomWeightedSymbol());
   const winningLines = PAYLINES.map((line) => evaluateLine(grid, line, betCents)).filter(
     (x): x is WinningLineResult => x !== null
   );
-
   if (winningLines.length > 0) {
     const payoutCents = winningLines.reduce((acc, item) => acc + item.payoutCents, 0);
-    const outcome = winningLines
-      .map((l) => `${l.label} ${l.symbol} (${l.multiplier}x)`)
-      .join(" | ");
-    return {
-      grid,
-      winningLines,
-      payoutCents,
-      fullGridBonusCents: 0,
-      outcome,
-    };
+    const outcome = winningLines.map((l) => l.label + " " + l.symbol + " (" + l.multiplier + "x)").join(" | ");
+    return { grid, winningLines, payoutCents, fullGridBonusCents: 0, outcome };
   }
 
   const fullMatch = hasFullGridMatch(grid);
@@ -178,17 +138,11 @@ function generateGrid(betCents: number): {
       winningLines: [],
       payoutCents: fullGridBonusCents,
       fullGridBonusCents,
-      outcome: `Grade Completa ${fullMatch} (10x)`,
+      outcome: "Grade Completa " + fullMatch + " (10x)",
     };
   }
 
-  return {
-    grid,
-    winningLines: [],
-    payoutCents: 0,
-    fullGridBonusCents: 0,
-    outcome: "Sem sequência",
-  };
+  return { grid, winningLines: [], payoutCents: 0, fullGridBonusCents: 0, outcome: "Sem sequencia" };
 }
 
 export async function POST(req: Request) {
@@ -196,44 +150,29 @@ export async function POST(req: Request) {
     const body = await req.json();
     const username = String(body?.username ?? "").trim().toLowerCase();
     const betCents = Number(body?.betCents);
-
     if (!username) {
-      return NextResponse.json({ ok: false, error: "Jogador inválido." }, { status: 400 });
+      return NextResponse.json({ ok: false, error: "Jogador invalido." }, { status: 400 });
     }
     if (!Number.isInteger(betCents) || betCents < 100 || betCents > 100000) {
-      return NextResponse.json({ ok: false, error: "Valor de aposta inválido." }, { status: 400 });
+      return NextResponse.json({ ok: false, error: "Valor de aposta invalido." }, { status: 400 });
     }
-
     await ensureAuthTables();
     const player = await getOrCreatePlayer(username);
     const generated = generateGrid(betCents);
-
     const spinResult = await registerSpin({
       playerId: player.id,
       betCents,
       payoutCents: generated.payoutCents,
       outcome: generated.outcome,
     });
-
     const updatedPlayerRes = await db.query(
-      `SELECT id, username, full_name, email, balance_cents::text
-       FROM players
-       WHERE id = $1`,
+      "SELECT id, username, full_name, email, balance_cents::text FROM players WHERE id = $1",
       [player.id]
     );
-
-    const updatedPlayer =
-      (updatedPlayerRes.rows as {
-        id: number;
-        username: string;
-        full_name: string | null;
-        email: string | null;
-        balance_cents: string;
-      }[])[0] ?? {
-        ...player,
-        balance_cents: spinResult.balance_cents,
-      };
-
+    const updatedPlayer = updatedPlayerRes.rows[0] ?? {
+      ...player,
+      balance_cents: spinResult.balance_cents,
+    };
     return NextResponse.json({
       ok: true,
       player: updatedPlayer,
@@ -245,10 +184,7 @@ export async function POST(req: Request) {
   } catch (err) {
     const message = err instanceof Error ? err.message : "Erro ao processar giro.";
     if (message === "SALDO_INSUFICIENTE") {
-      return NextResponse.json(
-        { ok: false, error: "Saldo insuficiente para essa aposta." },
-        { status: 400 }
-      );
+      return NextResponse.json({ ok: false, error: "Saldo insuficiente." }, { status: 400 });
     }
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
