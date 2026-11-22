@@ -1157,6 +1157,9 @@ setPlayer(data.player);
                     <span className="font-bold text-emerald-300">PIX Confirmado ({pixReceipt.status})</span>
                     <span className="font-mono text-yellow-300">{formatBRL(pixReceipt.amount_cents)}</span>
                   </div>
+                  <p className="text-[11px] text-emerald-200">
+                    Chave PIX (Mercado Pago): <strong className="font-mono text-white">{pixReceipt.pix_key}</strong>
+                  </p>
                   <p className="text-[11px] text-emerald-100/80 break-all font-mono bg-blue-950/80 p-2 rounded-lg border border-emerald-700/40">
                     {pixReceipt.pix_copy_paste}
                   </p>

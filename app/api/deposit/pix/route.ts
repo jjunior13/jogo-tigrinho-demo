@@ -45,7 +45,7 @@ export async function POST(req: Request) {
 
     const player = await getOrCreatePlayer(username);
     const txid = "PIX" + crypto.randomBytes(6).toString("hex").toUpperCase();
-    const pixKey = process.env.PIX_KEY || "financeiro@tigrinhodemo.local";
+    const pixKey = process.env.PIX_KEY || "08391656764";
     const merchantName = process.env.PIX_MERCHANT_NAME || "TIGRINHO PIX";
     const pixCopyPaste = buildPixPayload({ txid, amountCents, pixKey, merchantName });
 
