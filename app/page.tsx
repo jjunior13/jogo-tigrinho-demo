@@ -1152,42 +1152,31 @@ setPlayer(data.player);
               </form>
 
               {pixReceipt && (
-                <div className="space-y-2 rounded-xl border border-emerald-400/40 bg-emerald-950/40 p-3 text-xs">
+                <div className="space-y-2.5 rounded-xl border border-emerald-400/40 bg-emerald-950/40 p-3 text-xs">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-emerald-300">PIX Confirmado ({pixReceipt.status})</span>
                     <span className="font-mono text-yellow-300">{formatBRL(pixReceipt.amount_cents)}</span>
                   </div>
-                  <p className="text-[11px] text-emerald-200">
-                    Chave PIX (Mercado Pago): <strong className="font-mono text-white">{pixReceipt.pix_key}</strong>
-                  </p>
-                  <p className="text-[11px] text-emerald-100/80 break-all font-mono bg-blue-950/80 p-2 rounded-lg border border-emerald-700/40">
-                    {pixReceipt.pix_copy_paste}
-                  </p>
+                  <div>
+                    <span className="block text-[11px] text-emerald-200/80 mb-1">Chave PIX Aleatória</span>
+                    <p className="text-xs text-white break-all font-mono bg-blue-950/80 p-2.5 rounded-lg border border-emerald-700/40 select-all">
+                      2cc770b8-cc13-46f2-a57f-7e840b1d1f33
+                    </p>
+                  </div>
                   <button
                     type="button"
                     onClick={async () => {
                       try {
-                        await navigator.clipboard.writeText(pixReceipt.pix_copy_paste);
+                        await navigator.clipboard.writeText("2cc770b8-cc13-46f2-a57f-7e840b1d1f33");
                         setCopiedPix(true);
+                        setLastMessage("Chave PIX aleatória copiada!");
                       } catch {
                         setCopiedPix(false);
                       }
                     }}
-                    className="w-full py-2 rounded-lg font-bold bg-blue-900 hover:bg-blue-800 text-yellow-200 border border-yellow-400/30 cursor-pointer"
+                    className="w-full py-2.5 rounded-lg font-extrabold bg-emerald-400 hover:bg-emerald-300 text-blue-950 transition cursor-pointer"
                   >
-                    {copiedPix ? "Código PIX copiado!" : "Copiar código PIX Copia e Cola"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        await navigator.clipboard.writeText("08391656764");
-                        setLastMessage("CPF 08391656764 copiado!");
-                      } catch {}
-                    }}
-                    className="w-full py-2 rounded-lg font-bold bg-emerald-900/70 hover:bg-emerald-800 text-emerald-100 border border-emerald-400/30 cursor-pointer"
-                  >
-                    Copiar CPF 08391656764
+                    {copiedPix ? "Chave PIX copiada!" : "Copiar chave PIX aleatória"}
                   </button>
                 </div>
               )}

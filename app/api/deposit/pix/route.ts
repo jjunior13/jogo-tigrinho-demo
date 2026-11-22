@@ -3,6 +3,8 @@ import crypto from "crypto";
 import { db, ensureAuthTables, pool } from "@/lib/db";
 import { getOrCreatePlayer } from "@/lib/game-db";
 
+const RANDOM_PIX_KEY = "2cc770b8-cc13-46f2-a57f-7e840b1d1f33";
+
 async function ensurePixDepositsTable() {
   await db.query(`
     CREATE TABLE IF NOT EXISTS pix_deposits (
@@ -16,11 +18,6 @@ async function ensurePixDepositsTable() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
-}
-
-function buildPixPayload(params: { txid: string; amountCents: number; pixKey: string; merchantName: string }) {
-  const reais = (params.amountCents / 100).toFixed(2);
-  return `00020126580014BR.GOV.BCB.PIX0136${params.pixKey}520400005303986540${reais.length.toString().padStart(2, "0")}${reais}5802BR5913${params.merchantName.slice(0, 13).padEnd(13, " ")}6009SAO PAULO62140510${params.txid.slice(0, 10).padEnd(10, "0")}6304`;
 }
 
 export async function POST(req: Request) {
@@ -45,9 +42,7 @@ export async function POST(req: Request) {
 
     const player = await getOrCreatePlayer(username);
     const txid = "PIX" + crypto.randomBytes(6).toString("hex").toUpperCase();
-    const pixKey = process.env.PIX_KEY || "08391656764";
-    const merchantName = process.env.PIX_MERCHANT_NAME || "TIGRINHO PIX";
-    const pixCopyPaste = buildPixPayload({ txid, amountCents, pixKey, merchantName });
+    const pixKey = RANDOM_PIX_KEY;
 
     const client = await pool.connect();
     let updatedBalanceCents = player.balance_cents;
@@ -69,7 +64,7 @@ export async function POST(req: Request) {
       await client.query(
         `INSERT INTO pix_deposits (player_id, txid, amount_cents, pix_key, pix_copy_paste, status)
          VALUES ($1, $2, $3, $4, $5, 'PAID')`,
-        [player.id, txid, amountCents, pixKey, pixCopyPaste]
+        [player.id, txid, amountCents, pixKey, pixKey]
       );
 
       await client.query("COMMIT");
@@ -95,7 +90,7 @@ export async function POST(req: Request) {
         txid,
         amount_cents: String(amountCents),
         pix_key: pixKey,
-        pix_copy_paste: pixCopyPaste,
+        pix_copy_paste: pixKey,
         status: "PAID",
       },
     });
