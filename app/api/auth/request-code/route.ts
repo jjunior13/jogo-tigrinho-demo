@@ -175,7 +175,8 @@ export async function POST(req: Request) {
         smtpWarning: m?.message || m?.code || "Connection timeout",
         devCode: code,
       });
-    } catch (err) {
+    }
+  } catch (err) {
     const pgErr = err as { code?: string; message?: string };
     if (pgErr?.code === "23505") {
       return NextResponse.json(
