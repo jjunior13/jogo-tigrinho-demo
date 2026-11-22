@@ -335,6 +335,8 @@ const [checkingSession, setCheckingSession] = useState<boolean>(true);
     status: string;
   } | null>(null);
   const [copiedPix, setCopiedPix] = useState<boolean>(false);
+  const [infiniteCheckoutUrl, setInfiniteCheckoutUrl] = useState<string>("");
+  const [activeOrderNsu, setActiveOrderNsu] = useState<string>("");
 
   const { unlockAudio, playReelTick, playReelStop, playWinFanfare, playLossSound } = useSlotSound();
 
@@ -634,8 +636,9 @@ setPlayer(data.player);
     setDepositLoading(true);
     setDepositError("");
     setCopiedPix(false);
+    setInfiniteCheckoutUrl("");
     try {
-      const res = await fetch("/api/deposit/pix", {
+      const res = await fetch("/api/deposit/infinitepay", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -644,16 +647,21 @@ setPlayer(data.player);
         }),
       });
       const data = await res.json();
-      if (!res.ok || !data?.ok || !data?.player) {
-        setDepositError(data?.error || "Não foi possível gerar o PIX.");
+      if (!res.ok || !data?.ok || !data?.checkout_url) {
+        setDepositError(data?.error || "Não foi possível gerar o link de pagamento InfinitePay.");
         return;
       }
-      setPlayer(data.player);
-      setPixReceipt(data.deposit || null);
-      setLastMessage(`Depósito PIX de ${formatBRL(amountCents)} confirmado!`);
-      await syncPlayerFromServer(data.player.username);
+      setInfiniteCheckoutUrl(data.checkout_url);
+      setActiveOrderNsu(data.order_nsu || "");
+      if (data.order_nsu) {
+        try {
+          window.localStorage.setItem("pending_infinitepay_order_nsu", data.order_nsu);
+        } catch {}
+      }
+      setLastMessage(`Checkout InfinitePay de ${formatBRL(amountCents)} gerado!`);
+      window.location.href = data.checkout_url;
     } catch {
-      setDepositError("Erro de rede ao processar depósito PIX.");
+      setDepositError("Erro de rede ao conectar com o checkout InfinitePay.");
     } finally {
       setDepositLoading(false);
     }
@@ -1078,7 +1086,7 @@ setPlayer(data.player);
                 }}
                 className="w-full py-3 rounded-xl font-extrabold text-blue-950 bg-gradient-to-r from-yellow-300 via-yellow-400 to-amber-300 hover:from-yellow-200 hover:to-yellow-300 transition cursor-pointer shadow-lg"
               >
-                Depositar via PIX
+                Depositar (InfinitePay)
               </button>
             </div>
           </div>
@@ -1089,7 +1097,7 @@ setPlayer(data.player);
             <div className="w-full max-w-md rounded-2xl border border-emerald-400/40 bg-blue-950 p-5 text-yellow-100 shadow-2xl space-y-4">
               <div className="flex items-center justify-between border-b border-emerald-400/20 pb-3">
                 <div>
-                  <h2 className="text-base font-extrabold text-emerald-300">Depósito PIX</h2>
+                  <h2 className="text-base font-extrabold text-emerald-300">Depósito InfinitePay (PIX ou Cartão)</h2>
                   <p className="text-xs text-emerald-200/80">Saldo atual: {formatBRL(player.balance_cents)}</p>
                 </div>
                 <button
@@ -1147,31 +1155,28 @@ setPlayer(data.player);
                   disabled={depositLoading}
                   className="w-full py-3 rounded-xl font-extrabold text-blue-950 bg-gradient-to-r from-emerald-300 via-emerald-400 to-teal-300 hover:from-emerald-200 hover:to-emerald-300 disabled:opacity-50 transition cursor-pointer shadow-lg"
                 >
-                  {depositLoading ? "Gerando PIX e creditando..." : "Gerar PIX e Depositar"}
+                  {depositLoading ? "Abrindo Checkout InfinitePay..." : "Pagar com InfinitePay"}
                 </button>
               </form>
 
-              {pixReceipt && (
+              {infiniteCheckoutUrl && (
                 <div className="space-y-2.5 rounded-xl border border-emerald-400/40 bg-emerald-950/40 p-3 text-center">
-                  <span className="block text-xs text-emerald-200/80">CPF</span>
-                  <p className="text-base font-bold text-white font-mono bg-blue-950/80 p-2.5 rounded-lg border border-emerald-700/40 select-all">
-                    08391656764
-                  </p>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        await navigator.clipboard.writeText("08391656764");
-                        setCopiedPix(true);
-                        setLastMessage("CPF 08391656764 copiado!");
-                      } catch {
-                        setCopiedPix(false);
-                      }
-                    }}
-                    className="w-full py-2.5 rounded-lg font-extrabold bg-emerald-400 hover:bg-emerald-300 text-blue-950 transition cursor-pointer text-xs"
+                  <span className="block text-xs text-emerald-200/90">
+                    Checkout InfinitePay pronto (PIX ou Cartão)
+                  </span>
+                  {activeOrderNsu && (
+                    <span className="block text-[11px] font-mono text-emerald-300/80">
+                      Pedido: {activeOrderNsu}
+                    </span>
+                  )}
+                  <a
+                    href={infiniteCheckoutUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block w-full py-2.5 rounded-lg font-extrabold bg-emerald-400 hover:bg-emerald-300 text-blue-950 transition text-xs"
                   >
-                    {copiedPix ? "CPF copiado!" : "Copiar CPF"}
-                  </button>
+                    Abrir Checkout InfinitePay
+                  </a>
                 </div>
               )}
             </div>
