@@ -1177,6 +1177,18 @@ setPlayer(data.player);
                   >
                     {copiedPix ? "Código PIX copiado!" : "Copiar código PIX Copia e Cola"}
                   </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText("08391656764");
+                        setLastMessage("CPF 08391656764 copiado!");
+                      } catch {}
+                    }}
+                    className="w-full py-2 rounded-lg font-bold bg-emerald-900/70 hover:bg-emerald-800 text-emerald-100 border border-emerald-400/30 cursor-pointer"
+                  >
+                    Copiar CPF 08391656764
+                  </button>
                 </div>
               )}
             </div>
