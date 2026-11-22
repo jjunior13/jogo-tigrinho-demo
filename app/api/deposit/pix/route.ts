@@ -5,18 +5,34 @@ import { getOrCreatePlayer } from "@/lib/game-db";
 
 const CPF_PIX_KEY = "08391656764";
 
-async function ensurePixDepositsTable() {
+export async function ensurePixDepositsTable() {
   await db.query(`
     CREATE TABLE IF NOT EXISTS pix_deposits (
       id SERIAL PRIMARY KEY,
       player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
       txid VARCHAR(64) NOT NULL UNIQUE,
+      external_reference VARCHAR(120),
+      mp_payment_id VARCHAR(120) UNIQUE,
       amount_cents BIGINT NOT NULL,
       pix_key VARCHAR(120) NOT NULL,
       pix_copy_paste TEXT NOT NULL,
-      status VARCHAR(24) NOT NULL DEFAULT 'PAID',
+      status VARCHAR(24) NOT NULL DEFAULT 'PENDING',
+      paid_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
+  `);
+
+  await db.query(`
+    ALTER TABLE pix_deposits
+    ADD COLUMN IF NOT EXISTS external_reference VARCHAR(120),
+    ADD COLUMN IF NOT EXISTS mp_payment_id VARCHAR(120),
+    ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ
+  `);
+
+  await db.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS pix_deposits_mp_payment_id_idx
+    ON pix_deposits (mp_payment_id)
+    WHERE mp_payment_id IS NOT NULL
   `);
 }
 
@@ -42,29 +58,18 @@ export async function POST(req: Request) {
 
     const player = await getOrCreatePlayer(username);
     const txid = "PIX" + crypto.randomBytes(6).toString("hex").toUpperCase();
-    const pixKey = CPF_PIX_KEY;
+    const externalReference = `dep_${player.id}_${txid}`;
 
     const client = await pool.connect();
-    let updatedBalanceCents = player.balance_cents;
-
     try {
       await client.query("BEGIN");
 
-      const balanceRes = await client.query<{ balance_cents: string }>(
-        `UPDATE players
-         SET balance_cents = balance_cents + $1,
-             updated_at = NOW()
-         WHERE id = $2
-         RETURNING balance_cents::text`,
-        [amountCents, player.id]
-      );
-
-      updatedBalanceCents = balanceRes.rows[0]?.balance_cents ?? player.balance_cents;
-
       await client.query(
-        `INSERT INTO pix_deposits (player_id, txid, amount_cents, pix_key, pix_copy_paste, status)
-         VALUES ($1, $2, $3, $4, $5, 'PAID')`,
-        [player.id, txid, amountCents, pixKey, pixKey]
+        `INSERT INTO pix_deposits (
+           player_id, txid, external_reference, amount_cents, pix_key, pix_copy_paste, status
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, 'PENDING')`,
+        [player.id, txid, externalReference, amountCents, CPF_PIX_KEY, CPF_PIX_KEY]
       );
 
       await client.query("COMMIT");
@@ -75,27 +80,19 @@ export async function POST(req: Request) {
       client.release();
     }
 
-    const updatedPlayerRes = await db.query(
-      "SELECT id, username, full_name, email, phone, balance_cents::text FROM players WHERE id = $1",
-      [player.id]
-    );
-
     return NextResponse.json({
       ok: true,
-      player: updatedPlayerRes.rows[0] ?? {
-        ...player,
-        balance_cents: updatedBalanceCents,
-      },
+      player,
       deposit: {
         txid,
+        external_reference: externalReference,
         amount_cents: String(amountCents),
-        pix_key: pixKey,
-        pix_copy_paste: pixKey,
-        status: "PAID",
+        pix_key: CPF_PIX_KEY,
+        status: "PENDING",
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Erro ao processar depósito PIX.";
+    const message = error instanceof Error ? error.message : "Erro ao iniciar depósito PIX.";
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 }
