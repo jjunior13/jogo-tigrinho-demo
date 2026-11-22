@@ -161,12 +161,21 @@ export async function POST(req: Request) {
       [email, code, expiresAt]
     );
 
-    await sendVerificationEmail(email, name, code);
-
-    return NextResponse.json({
-      ok: true,
-      emailSent: true,
-    });
+    try {
+      await sendVerificationEmail(email, name, code);
+      return NextResponse.json({
+        ok: true,
+        emailSent: true,
+      });
+    } catch (mailErr) {
+      const m = mailErr as { message?: string; code?: string };
+      return NextResponse.json({
+        ok: true,
+        emailSent: false,
+        smtpWarning: m?.message || m?.code || "Connection timeout",
+        devCode: code,
+      });
+    }
   } catch (err) {
     const pgErr = err as { code?: string; message?: string };
     if (pgErr?.code === "23505") {
