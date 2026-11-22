@@ -3,13 +3,18 @@ import { pool } from "@/lib/db";
 export interface PlayerRecord {
   id: number;
   username: string;
+  full_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
   balance_cents: string;
 }
 
 export async function getOrCreatePlayer(username: string): Promise<PlayerRecord> {
   const cleanUsername = username.trim().toLowerCase();
   const existing = await pool.query<PlayerRecord>(
-    "SELECT id, username, balance_cents::text FROM players WHERE username = $1",
+    `SELECT id, username, full_name, email, phone, balance_cents::text
+     FROM players
+     WHERE username = $1`,
     [cleanUsername]
   );
 
@@ -21,7 +26,7 @@ export async function getOrCreatePlayer(username: string): Promise<PlayerRecord>
     `INSERT INTO players (username, balance_cents)
      VALUES ($1, 10000)
      ON CONFLICT (username) DO UPDATE SET username = EXCLUDED.username
-     RETURNING id, username, balance_cents::text`,
+     RETURNING id, username, full_name, email, phone, balance_cents::text`,
     [cleanUsername]
   );
 

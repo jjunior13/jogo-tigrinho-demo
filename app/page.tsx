@@ -15,6 +15,7 @@ interface PlayerInfo {
   username: string;
   full_name?: string | null;
   email?: string | null;
+  phone?: string | null;
   balance_cents: string;
 }
 
@@ -321,6 +322,19 @@ const [checkingSession, setCheckingSession] = useState<boolean>(true);
   const [lastMessage, setLastMessage] = useState<string>("Pronto para girar.");
   const [spinning, setSpinning] = useState<boolean>(false);
   const [muted, setMuted] = useState<boolean>(false);
+  const [showProfileModal, setShowProfileModal] = useState<boolean>(false);
+  const [showDepositModal, setShowDepositModal] = useState<boolean>(false);
+  const [depositAmountReais, setDepositAmountReais] = useState<string>("20");
+  const [depositLoading, setDepositLoading] = useState<boolean>(false);
+  const [depositError, setDepositError] = useState<string>("");
+  const [pixReceipt, setPixReceipt] = useState<{
+    txid: string;
+    amount_cents: string;
+    pix_key: string;
+    pix_copy_paste: string;
+    status: string;
+  } | null>(null);
+  const [copiedPix, setCopiedPix] = useState<boolean>(false);
 
   const { unlockAudio, playReelTick, playReelStop, playWinFanfare, playLossSound } = useSlotSound();
 
@@ -605,6 +619,46 @@ setPlayer(data.player);
     }
   }
 
+
+  async function handlePixDeposit(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    if (!player) return;
+    const normalized = depositAmountReais.replace(",", ".").trim();
+    const parsedReais = Number(normalized);
+    const amountCents = Math.round(parsedReais * 100);
+    if (!Number.isFinite(parsedReais) || !Number.isInteger(amountCents) || amountCents < 100 || amountCents > 10000000) {
+      setDepositError("Informe um valor válido entre R$ 1,00 e R$ 100.000,00.");
+      return;
+    }
+
+    setDepositLoading(true);
+    setDepositError("");
+    setCopiedPix(false);
+    try {
+      const res = await fetch("/api/deposit/pix", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: player.username,
+          amountCents,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.ok || !data?.player) {
+        setDepositError(data?.error || "Não foi possível gerar o PIX.");
+        return;
+      }
+      setPlayer(data.player);
+      setPixReceipt(data.deposit || null);
+      setLastMessage(`Depósito PIX de ${formatBRL(amountCents)} confirmado!`);
+      await syncPlayerFromServer(data.player.username);
+    } catch {
+      setDepositError("Erro de rede ao processar depósito PIX.");
+    } finally {
+      setDepositLoading(false);
+    }
+  }
+
   if (checkingSession) {
     return (
       <main className="min-h-screen bg-gradient-to-b from-emerald-950 via-green-950 to-blue-950 text-yellow-200 flex items-center justify-center p-6">
@@ -812,6 +866,24 @@ setPlayer(data.player);
             </button>
             <button
               type="button"
+              onClick={() => {
+                setDepositError("");
+                setPixReceipt(null);
+                setShowDepositModal(true);
+              }}
+              className="rounded-lg border border-emerald-400/50 bg-emerald-500/20 px-2.5 py-1.5 text-xs font-bold text-emerald-200 hover:bg-emerald-500/30 cursor-pointer"
+            >
+              Depósitos
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowProfileModal(true)}
+              className="rounded-lg border border-yellow-400/50 bg-yellow-400/15 px-2.5 py-1.5 text-xs font-bold text-yellow-200 hover:bg-yellow-400/25 cursor-pointer"
+            >
+              Meu Painel
+            </button>
+            <button
+              type="button"
               onClick={handleLogout}
               className="rounded-lg border border-yellow-400/40 bg-blue-950/80 px-2.5 py-1.5 text-xs font-semibold text-yellow-200 hover:border-yellow-300 cursor-pointer"
             >
@@ -960,6 +1032,154 @@ setPlayer(data.player);
           )}
         </div>
       </div>
+        {showProfileModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+            <div className="w-full max-w-md rounded-2xl border border-yellow-400/40 bg-blue-950 p-5 text-yellow-100 shadow-2xl space-y-4">
+              <div className="flex items-center justify-between border-b border-yellow-400/20 pb-3">
+                <div>
+                  <h2 className="text-base font-extrabold text-yellow-300">Painel do Usuário</h2>
+                  <p className="text-xs text-emerald-200/80">@{player.username}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowProfileModal(false)}
+                  className="rounded-lg border border-yellow-400/30 px-2.5 py-1 text-xs font-bold text-yellow-200 hover:bg-blue-900 cursor-pointer"
+                >
+                  Fechar
+                </button>
+              </div>
+
+              <div className="space-y-2.5 rounded-xl bg-blue-900/40 border border-emerald-700/50 p-3.5 text-xs">
+                <div>
+                  <span className="block text-emerald-200/70">Nome</span>
+                  <strong className="text-sm text-white">{player.full_name || player.username}</strong>
+                </div>
+                <div>
+                  <span className="block text-emerald-200/70">E-mail</span>
+                  <strong className="text-sm text-white">{player.email || "Não informado"}</strong>
+                </div>
+                <div>
+                  <span className="block text-emerald-200/70">Telefone</span>
+                  <strong className="text-sm text-white">{player.phone || "Não informado"}</strong>
+                </div>
+                <div className="pt-1 border-t border-emerald-700/40 flex items-center justify-between">
+                  <span className="text-emerald-200/80">Saldo disponível</span>
+                  <strong className="text-base font-mono text-yellow-300">{formatBRL(player.balance_cents)}</strong>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowProfileModal(false);
+                  setDepositError("");
+                  setPixReceipt(null);
+                  setShowDepositModal(true);
+                }}
+                className="w-full py-3 rounded-xl font-extrabold text-blue-950 bg-gradient-to-r from-yellow-300 via-yellow-400 to-amber-300 hover:from-yellow-200 hover:to-yellow-300 transition cursor-pointer shadow-lg"
+              >
+                Depositar via PIX
+              </button>
+            </div>
+          </div>
+        )}
+
+        {showDepositModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+            <div className="w-full max-w-md rounded-2xl border border-emerald-400/40 bg-blue-950 p-5 text-yellow-100 shadow-2xl space-y-4">
+              <div className="flex items-center justify-between border-b border-emerald-400/20 pb-3">
+                <div>
+                  <h2 className="text-base font-extrabold text-emerald-300">Depósito PIX</h2>
+                  <p className="text-xs text-emerald-200/80">Saldo atual: {formatBRL(player.balance_cents)}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowDepositModal(false)}
+                  className="rounded-lg border border-yellow-400/30 px-2.5 py-1 text-xs font-bold text-yellow-200 hover:bg-blue-900 cursor-pointer"
+                >
+                  Fechar
+                </button>
+              </div>
+
+              <div className="grid grid-cols-4 gap-2">
+                {["10", "20", "50", "100"].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => {
+                      setDepositAmountReais(preset);
+                      setDepositError("");
+                    }}
+                    className={`py-2 rounded-lg text-xs font-bold border cursor-pointer ${
+                      depositAmountReais === preset
+                        ? "bg-emerald-400 text-blue-950 border-emerald-300"
+                        : "bg-blue-900/50 text-emerald-100 border-emerald-700/60 hover:border-emerald-400"
+                    }`}
+                  >
+                    R$ {preset}
+                  </button>
+                ))}
+              </div>
+
+              <form onSubmit={handlePixDeposit} className="space-y-3">
+                <div>
+                  <label className="block text-xs font-semibold text-emerald-200 mb-1">
+                    Valor do depósito (R$)
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={depositAmountReais}
+                    onChange={(e) => setDepositAmountReais(e.target.value)}
+                    placeholder="Ex.: 20.00"
+                    className="w-full rounded-xl border border-emerald-600/60 bg-blue-900/50 px-3 py-2.5 text-sm font-mono text-white focus:outline-none focus:border-emerald-300"
+                  />
+                </div>
+
+                {depositError && (
+                  <p className="text-xs font-semibold text-rose-300 bg-rose-950/60 border border-rose-500/40 rounded-lg px-3 py-2">
+                    {depositError}
+                  </p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={depositLoading}
+                  className="w-full py-3 rounded-xl font-extrabold text-blue-950 bg-gradient-to-r from-emerald-300 via-emerald-400 to-teal-300 hover:from-emerald-200 hover:to-emerald-300 disabled:opacity-50 transition cursor-pointer shadow-lg"
+                >
+                  {depositLoading ? "Gerando PIX e creditando..." : "Gerar PIX e Depositar"}
+                </button>
+              </form>
+
+              {pixReceipt && (
+                <div className="space-y-2 rounded-xl border border-emerald-400/40 bg-emerald-950/40 p-3 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-emerald-300">PIX Confirmado ({pixReceipt.status})</span>
+                    <span className="font-mono text-yellow-300">{formatBRL(pixReceipt.amount_cents)}</span>
+                  </div>
+                  <p className="text-[11px] text-emerald-100/80 break-all font-mono bg-blue-950/80 p-2 rounded-lg border border-emerald-700/40">
+                    {pixReceipt.pix_copy_paste}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(pixReceipt.pix_copy_paste);
+                        setCopiedPix(true);
+                      } catch {
+                        setCopiedPix(false);
+                      }
+                    }}
+                    className="w-full py-2 rounded-lg font-bold bg-blue-900 hover:bg-blue-800 text-yellow-200 border border-yellow-400/30 cursor-pointer"
+                  >
+                    {copiedPix ? "Código PIX copiado!" : "Copiar código PIX Copia e Cola"}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
     </main>
   );
 }
