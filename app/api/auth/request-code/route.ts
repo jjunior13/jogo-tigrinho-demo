@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import nodemailer from "nodemailer";
 import { db, ensureAuthTables } from "@/lib/db";
 import { hashPassword, normalizeEmail, normalizePhone } from "@/lib/auth";
 
@@ -30,44 +31,44 @@ function buildBaseUsername(name: string, email: string): string {
 }
 
 async function sendVerificationEmail(toEmail: string, playerName: string, code: string) {
-  const apiKey = process.env.RESEND_API_KEY?.trim();
-  if (!apiKey) {
-    throw new Error(
-      "RESEND_API_KEY não configurada na Vercel. Adicione a chave da Resend e faça Redeploy."
-    );
-  }
-
+  const host = (process.env.SMTP_HOST || "mail.plmx.com.br").trim();
+  const port = Number((process.env.SMTP_PORT || "465").trim());
+  const user = (process.env.SMTP_USER || "noreply@plmx.com.br").trim();
+  const pass = (process.env.SMTP_PASS || "Ledzep13@@##").trim();
   const fromAddress =
-    process.env.EMAIL_FROM?.trim() || "Tigrinho Brasil <onboarding@resend.dev>";
+    (process.env.SMTP_FROM || process.env.EMAIL_FROM || "").trim() ||
+    `"Tigrinho Brasil" <${user}>`;
 
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
+  const transporter = nodemailer.createTransport({
+    host,
+    port,
+    secure: port === 465,
+    auth: {
+      user,
+      pass,
     },
-    body: JSON.stringify({
-      from: fromAddress,
-      to: [toEmail],
-      subject: "Bem-vindo ao Tigrinho Brasil! Seu código de confirmação",
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 440px; margin: 0 auto; padding: 24px; background: #064e3b; color: #fefce8; border-radius: 14px; border: 2px solid #facc15;">
-          <h2 style="margin-top: 0; color: #facc15; text-align: center;">🇧🇷 Bem-vindo ao Tigrinho Brasil!</h2>
-          <p style="font-size: 15px; line-height: 1.5;">Olá, <strong>${playerName}</strong>! Seja muito bem-vindo.</p>
-          <p style="font-size: 14px; line-height: 1.5;">Digite o código de confirmação abaixo na tela do jogo para liberar seu acesso:</p>
-          <div style="font-size: 32px; font-weight: bold; letter-spacing: 8px; text-align: center; padding: 16px; margin: 20px 0; background: #172554; color: #facc15; border-radius: 10px; border: 1px solid #facc15;">
-            ${code}
-          </div>
-          <p style="font-size: 12px; color: #fde047; text-align: center; margin-bottom: 0;">Este código expira em 15 minutos.</p>
-        </div>
-      `,
-    }),
+    tls: {
+      rejectUnauthorized: false,
+    },
   });
 
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Falha ao enviar e-mail pela Resend: ${errText}`);
-  }
+  await transporter.sendMail({
+    from: fromAddress,
+    to: toEmail,
+    subject: "Bem-vindo ao Tigrinho Brasil! Seu código de confirmação",
+    text: `Olá, ${playerName}! Seja muito bem-vindo ao Tigrinho Brasil.\nSeu código de confirmação de 6 dígitos é: ${code}\nEste código expira em 15 minutos.`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 440px; margin: 0 auto; padding: 24px; background: #064e3b; color: #fefce8; border-radius: 14px; border: 2px solid #facc15;">
+        <h2 style="margin-top: 0; color: #facc15; text-align: center;">🇧🇷 Bem-vindo ao Tigrinho Brasil!</h2>
+        <p style="font-size: 15px; line-height: 1.5;">Olá, <strong>${playerName}</strong>! Seja muito bem-vindo.</p>
+        <p style="font-size: 14px; line-height: 1.5;">Digite o código de confirmação abaixo na tela do jogo para liberar seu acesso:</p>
+        <div style="font-size: 32px; font-weight: bold; letter-spacing: 8px; text-align: center; padding: 16px; margin: 20px 0; background: #172554; color: #facc15; border-radius: 10px; border: 1px solid #facc15;">
+          ${code}
+        </div>
+        <p style="font-size: 12px; color: #fde047; text-align: center; margin-bottom: 0;">Este código expira em 15 minutos.</p>
+      </div>
+    `,
+  });
 }
 
 export async function POST(req: Request) {
