@@ -335,6 +335,15 @@ const [checkingSession, setCheckingSession] = useState<boolean>(true);
     status: string;
   } | null>(null);
   const [copiedPix, setCopiedPix] = useState<boolean>(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState<boolean>(false);
+  const [withdrawAmountReais, setWithdrawAmountReais] = useState<string>("20");
+  const [withdrawPixKey, setWithdrawPixKey] = useState<string>("");
+  const [withdrawLoading, setWithdrawLoading] = useState<boolean>(false);
+  const [withdrawError, setWithdrawError] = useState<string>("");
+  const [withdrawSuccess, setWithdrawSuccess] = useState<string>("");
+  const [withdrawHistory, setWithdrawHistory] = useState<
+    Array<{ id: number; amount_cents: string; pix_key: string; status: string; created_at: string }>
+  >([]);
   const [infiniteCheckoutUrl, setInfiniteCheckoutUrl] = useState<string>("");
   const [activeOrderNsu, setActiveOrderNsu] = useState<string>("");
 
@@ -665,6 +674,65 @@ setPlayer(data.player);
       window.clearInterval(timer);
     };
   }, [player?.username, activeOrderNsu]);
+
+
+  async function loadWithdrawHistory(targetUsername: string) {
+    try {
+      const res = await fetch(`/api/withdraw?username=${encodeURIComponent(targetUsername)}`, {
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (res.ok && data?.ok && Array.isArray(data?.withdrawals)) {
+        setWithdrawHistory(data.withdrawals);
+      }
+    } catch {}
+  }
+
+  async function handleWithdrawSubmit(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    if (!player) return;
+    const normalized = withdrawAmountReais.replace(",", ".").trim();
+    const parsedReais = Number(normalized);
+    const amountCents = Math.round(parsedReais * 100);
+    if (!Number.isFinite(parsedReais) || !Number.isInteger(amountCents) || amountCents < 1000 || amountCents > 10000000) {
+      setWithdrawError("Informe um valor entre R$ 10,00 e R$ 100.000,00.");
+      return;
+    }
+    if (!withdrawPixKey.trim() || withdrawPixKey.trim().length < 4) {
+      setWithdrawError("Digite sua chave PIX (CPF, e-mail, celular ou chave aleatória).");
+      return;
+    }
+
+    setWithdrawLoading(true);
+    setWithdrawError("");
+    setWithdrawSuccess("");
+    try {
+      const res = await fetch("/api/withdraw", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: player.username,
+          amountCents,
+          pixKey: withdrawPixKey.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.ok) {
+        setWithdrawError(data?.error || "Não foi possível solicitar o saque.");
+        return;
+      }
+      if (data?.player) {
+        setPlayer(data.player);
+      }
+      setWithdrawSuccess(`Saque de ${formatBRL(amountCents)} registrado para a chave ${withdrawPixKey.trim()}!`);
+      setLastMessage(`Solicitação de saque de ${formatBRL(amountCents)} enviada.`);
+      void loadWithdrawHistory(player.username);
+    } catch {
+      setWithdrawError("Erro de rede ao solicitar saque.");
+    } finally {
+      setWithdrawLoading(false);
+    }
+  }
 
   async function handlePixDeposit(e?: React.FormEvent) {
     if (e) e.preventDefault();
@@ -1226,6 +1294,104 @@ setPlayer(data.player);
             </div>
           </div>
         )}
+
+    
+      {showWithdrawModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-amber-400/30 bg-blue-950 p-5 text-amber-50 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <h2 className="text-lg font-black text-amber-300">Solicitar Saque PIX</h2>
+                <p className="text-xs text-emerald-200/80">
+                  Saldo disponível: <span className="font-bold text-white">{formatBRL(Number(player?.balance_cents ?? 0))}</span>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowWithdrawModal(false)}
+                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white/10 hover:bg-white/20 text-white transition cursor-pointer"
+              >
+                Fechar
+              </button>
+            </div>
+
+            <form onSubmit={handleWithdrawSubmit} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-emerald-100 mb-1">
+                  Chave PIX (CPF, e-mail, celular ou aleatória)
+                </label>
+                <input
+                  type="text"
+                  value={withdrawPixKey}
+                  onChange={(e) => setWithdrawPixKey(e.target.value)}
+                  placeholder="Ex.: 000.000.000-00 ou seu@email.com"
+                  className="w-full rounded-xl border border-white/15 bg-blue-900/60 px-3.5 py-2.5 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-amber-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-emerald-100 mb-1">
+                  Valor do saque (R$)
+                </label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={withdrawAmountReais}
+                  onChange={(e) => setWithdrawAmountReais(e.target.value)}
+                  placeholder="20"
+                  className="w-full rounded-xl border border-white/15 bg-blue-900/60 px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-400"
+                />
+              </div>
+
+              {withdrawError && (
+                <div className="rounded-xl border border-rose-400/40 bg-rose-950/60 px-3 py-2 text-xs text-rose-200">
+                  {withdrawError}
+                </div>
+              )}
+
+              {withdrawSuccess && (
+                <div className="rounded-xl border border-emerald-400/40 bg-emerald-950/60 px-3 py-2 text-xs text-emerald-200">
+                  {withdrawSuccess}
+                </div>
+              )}
+
+              {withdrawHistory.length > 0 && (
+                <div className="space-y-1.5 pt-2 border-t border-white/10">
+                  <span className="block text-[11px] font-bold uppercase tracking-wider text-emerald-200/75">
+                    Seus últimos saques
+                  </span>
+                  <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                    {withdrawHistory.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between gap-2 rounded-lg bg-blue-900/50 border border-white/10 px-3 py-2 text-xs"
+                      >
+                        <div className="min-w-0">
+                          <div className="font-bold text-amber-200 truncate">
+                            {formatBRL(Number(item.amount_cents))}
+                          </div>
+                          <div className="text-[11px] text-white/70 truncate">{item.pix_key}</div>
+                        </div>
+                        <span className="shrink-0 rounded-md px-2 py-0.5 text-[10px] font-extrabold bg-amber-400/20 text-amber-200 border border-amber-300/30">
+                          {item.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={withdrawLoading}
+                className="w-full py-3 rounded-xl font-black text-sm bg-amber-400 hover:bg-amber-300 disabled:opacity-60 text-blue-950 transition cursor-pointer"
+              >
+                {withdrawLoading ? "Processando saque..." : "Confirmar Saque PIX"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
     </main>
   );

@@ -50,3 +50,17 @@ export async function ensurePixDepositsTable() {
     WHERE mp_payment_id IS NOT NULL
   `);
 }
+
+export async function ensureWithdrawalsTable() {
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS withdrawals (
+      id SERIAL PRIMARY KEY,
+      player_id INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+      amount_cents BIGINT NOT NULL,
+      pix_key VARCHAR(140) NOT NULL,
+      status VARCHAR(24) NOT NULL DEFAULT 'PENDING',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      processed_at TIMESTAMPTZ
+    )
+  `);
+}
