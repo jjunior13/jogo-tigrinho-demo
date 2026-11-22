@@ -43,6 +43,10 @@ async function sendVerificationEmail(toEmail: string, playerName: string, code: 
     host,
     port,
     secure: port === 465,
+    requireTLS: port === 587,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
     auth: {
       user,
       pass,
