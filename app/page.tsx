@@ -41,7 +41,7 @@ const ALL_PAYLINES: {
   orientation: "horizontal" | "vertical";
   indices: [number, number, number];
 }[] = [
-  { id: "row-0", label: "Linha Topo", orientation: "horizontal", indices: [0, 1, 2] },
+  { id: "row-0", label: "Linha Topo", orientation: "horizontal", indices: [0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6], [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6] },
   { id: "row-1", label: "Linha Meio", orientation: "horizontal", indices: [3, 4, 5] },
   { id: "row-2", label: "Linha Base", orientation: "horizontal", indices: [6, 7, 8] },
   { id: "col-0", label: "Coluna Esquerda", orientation: "vertical", indices: [0, 3, 6] },
