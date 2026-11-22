@@ -22,7 +22,7 @@ interface PlayerInfo {
 interface WinningLineOverlay {
   id: string;
   label: string;
-  orientation: "horizontal" | "vertical" | "diagonal" | "diagonal";
+  orientation: "horizontal" | "vertical" | "diagonal" | "diagonal" | "diagonal";
   indices: [number, number, number];
   symbol: string;
   multiplier: number;
@@ -38,7 +38,7 @@ const BET_OPTIONS = [100, 500, 1000, 2000];
 const ALL_PAYLINES: {
   id: string;
   label: string;
-  orientation: "horizontal" | "vertical" | "diagonal" | "diagonal";
+  orientation: "horizontal" | "vertical" | "diagonal" | "diagonal" | "diagonal";
   indices: [number, number, number];
 }[] = [
   { id: "row-0", label: "Linha Topo", orientation: "horizontal", indices: [0, 1, 2] },

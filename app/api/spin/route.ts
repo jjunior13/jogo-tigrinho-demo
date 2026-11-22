@@ -17,7 +17,7 @@ const LINE_PAYOUT_MULTIPLIER: Record<GameSymbol, number> = {
 interface PaylineDef {
   id: string;
   label: string;
-  orientation: "horizontal" | "vertical" | "diagonal" | "diagonal";
+  orientation: "horizontal" | "vertical" | "diagonal" | "diagonal" | "diagonal";
   indices: [number, number, number];
 }
 
@@ -35,7 +35,7 @@ const PAYLINES: PaylineDef[] = [
 export interface WinningLineResult {
   id: string;
   label: string;
-  orientation: "horizontal" | "vertical" | "diagonal" | "diagonal";
+  orientation: "horizontal" | "vertical" | "diagonal" | "diagonal" | "diagonal";
   indices: [number, number, number];
   symbol: GameSymbol;
   multiplier: number;
