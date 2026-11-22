@@ -22,7 +22,7 @@ interface PlayerInfo {
 interface WinningLineOverlay {
   id: string;
   label: string;
-  orientation: "horizontal" | "vertical" | "diagonal" | "diagonal" | "diagonal";
+  orientation: "horizontal" | "vertical" | "diagonal";
   indices: [number, number, number];
   symbol: string;
   multiplier: number;
@@ -38,7 +38,7 @@ const BET_OPTIONS = [100, 500, 1000, 2000];
 const ALL_PAYLINES: {
   id: string;
   label: string;
-  orientation: "horizontal" | "vertical" | "diagonal" | "diagonal" | "diagonal";
+  orientation: "horizontal" | "vertical" | "diagonal";
   indices: [number, number, number];
 }[] = [
   { id: "row-0", label: "Linha Topo", orientation: "horizontal", indices: [0, 1, 2] },
@@ -55,6 +55,7 @@ const LINE_STYLE_MAP: Record<
   string,
   | { kind: "horizontal"; topPercent: number; colorClass: string }
   | { kind: "vertical"; leftPercent: number; colorClass: string }
+  | { kind: "diagonal"; angleDeg: number; colorClass: string }
 > = {
   "row-0": { kind: "horizontal", topPercent: 18, colorClass: "bg-yellow-300 shadow-[0_0_16px_#fde047]" },
   "row-1": { kind: "horizontal", topPercent: 50, colorClass: "bg-emerald-300 shadow-[0_0_16px_#6ee7b7]" },
@@ -62,6 +63,8 @@ const LINE_STYLE_MAP: Record<
   "col-0": { kind: "vertical", leftPercent: 17, colorClass: "bg-yellow-300 shadow-[0_0_16px_#fde047]" },
   "col-1": { kind: "vertical", leftPercent: 50, colorClass: "bg-emerald-300 shadow-[0_0_16px_#6ee7b7]" },
   "col-2": { kind: "vertical", leftPercent: 83, colorClass: "bg-sky-300 shadow-[0_0_16px_#7dd3fc]" },
+  "diag-0": { kind: "diagonal", angleDeg: 45, colorClass: "bg-amber-300 shadow-[0_0_18px_#fcd34d]" },
+  "diag-1": { kind: "diagonal", angleDeg: -45, colorClass: "bg-fuchsia-300 shadow-[0_0_18px_#f0abfc]" },
 };
 
 function detectWinningLinesFromGrid(grid: string[], betCents: number): WinningLineOverlay[] {
@@ -1090,7 +1093,7 @@ setPlayer(data.player);
                 return (
                   <div
                     key={line.id}
-                    style={{ left: `${styleCfg.leftPercent}%` }}
+                    style={{ left: `${("leftPercent" in styleCfg ? styleCfg.leftPercent : 50)}%` }}
                     className={`absolute top-1 bottom-1 w-2 -translate-x-1/2 rounded-full ${styleCfg.colorClass}`}
                   />
                 );
@@ -1237,6 +1240,21 @@ setPlayer(data.player);
               >
                 Depositar (InfinitePay)
               </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowProfileModal(false);
+                    setWithdrawError("");
+                    setWithdrawSuccess("");
+                    setShowWithdrawModal(true);
+                    if (player?.username) {
+                      void loadWithdrawHistory(player.username);
+                    }
+                  }}
+                  className="w-full rounded-xl bg-amber-400 hover:bg-amber-300 px-4 py-2.5 text-xs font-black text-blue-950 transition cursor-pointer"
+                >
+                  Sacar Saldo via PIX
+                </button>
             </div>
           </div>
         )}
