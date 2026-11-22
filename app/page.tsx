@@ -688,6 +688,17 @@ setPlayer(data.player);
     } catch {}
   }
 
+
+  function handleWithdrawAll() {
+    const currentCents = Number(player?.balance_cents ?? 0);
+    if (!Number.isFinite(currentCents) || currentCents <= 0) {
+      setWithdrawError("Você não possui saldo disponível para sacar.");
+      return;
+    }
+    setWithdrawError("");
+    setWithdrawAmountReais((currentCents / 100).toFixed(2));
+  }
+
   async function handleWithdrawSubmit(e?: React.FormEvent) {
     if (e) e.preventDefault();
     if (!player) return;
@@ -1341,6 +1352,45 @@ setPlayer(data.player);
                   placeholder="20"
                   className="w-full rounded-xl border border-white/15 bg-blue-900/60 px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-400"
                 />
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWithdrawError("");
+                      setWithdrawAmountReais("20");
+                    }}
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white/10 hover:bg-white/20 text-amber-100 transition cursor-pointer"
+                  >
+                    R$ 20
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWithdrawError("");
+                      setWithdrawAmountReais("50");
+                    }}
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white/10 hover:bg-white/20 text-amber-100 transition cursor-pointer"
+                  >
+                    R$ 50
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWithdrawError("");
+                      setWithdrawAmountReais("100");
+                    }}
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white/10 hover:bg-white/20 text-amber-100 transition cursor-pointer"
+                  >
+                    R$ 100
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleWithdrawAll}
+                    className="ml-auto px-3 py-1 rounded-lg text-[11px] font-extrabold bg-emerald-400 hover:bg-emerald-300 text-blue-950 transition cursor-pointer"
+                  >
+                    Sacar tudo
+                  </button>
+                </div>
               </div>
 
               {withdrawError && (
