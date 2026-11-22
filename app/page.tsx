@@ -622,6 +622,50 @@ setPlayer(data.player);
   }
 
 
+
+  useEffect(() => {
+    if (!player?.username) return;
+    const params = new URLSearchParams(window.location.search);
+    const urlOrderNsu = params.get("order_nsu") || "";
+    let storedOrderNsu = "";
+    try {
+      storedOrderNsu = window.localStorage.getItem("pending_infinitepay_order_nsu") || "";
+    } catch {}
+    const orderToCheck = (activeOrderNsu || urlOrderNsu || storedOrderNsu).trim();
+    if (!orderToCheck) return;
+
+    let active = true;
+    async function checkPaymentStatus() {
+      try {
+        const res = await fetch("/api/deposit/infinitepay/check", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ order_nsu: orderToCheck }),
+        });
+        const data = await res.json();
+        if (active && data?.ok && data?.paid && data?.player) {
+          setPlayer(data.player);
+          setInfiniteCheckoutUrl("");
+          setActiveOrderNsu("");
+          setLastMessage("Depósito confirmado na InfinitePay! Saldo creditado automaticamente.");
+          try {
+            window.localStorage.removeItem("pending_infinitepay_order_nsu");
+          } catch {}
+          if (urlOrderNsu) {
+            window.history.replaceState({}, "", window.location.pathname);
+          }
+        }
+      } catch {}
+    }
+
+    checkPaymentStatus();
+    const timer = window.setInterval(checkPaymentStatus, 4000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [player?.username, activeOrderNsu]);
+
   async function handlePixDeposit(e?: React.FormEvent) {
     if (e) e.preventDefault();
     if (!player) return;

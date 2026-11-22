@@ -17,6 +17,7 @@ async function verifyInfinitePayPayment(params: {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      Accept: "application/json",
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
@@ -72,12 +73,7 @@ export async function POST(req: NextRequest) {
     try {
       await client.query("BEGIN");
 
-      const depRes = await client.query<{
-        id: number;
-        player_id: number;
-        amount_cents: string;
-        status: string;
-      }>(
+      const depRes = await client.query(
         `SELECT id, player_id, amount_cents::text, status
          FROM infinitepay_deposits
          WHERE order_nsu = $1
@@ -86,7 +82,15 @@ export async function POST(req: NextRequest) {
         [orderNsu]
       );
 
-      const deposit = depRes.rows[0];
+      const deposit = depRes.rows[0] as
+        | {
+            id: number;
+            player_id: number;
+            amount_cents: string;
+            status: string;
+          }
+        | undefined;
+
       if (!deposit) {
         await client.query("COMMIT");
         return NextResponse.json({ ok: true, ignored: "Pedido não encontrado." });
@@ -102,7 +106,8 @@ export async function POST(req: NextRequest) {
         typeof check.paid_amount === "number" && Number.isFinite(check.paid_amount)
           ? Math.round(check.paid_amount)
           : creditCents;
-      const captureMethod = check.capture_method || (body?.capture_method ? String(body.capture_method) : null);
+      const captureMethod =
+        check.capture_method || (body?.capture_method ? String(body.capture_method) : null);
 
       await client.query(
         `UPDATE infinitepay_deposits
@@ -146,7 +151,8 @@ export async function POST(req: NextRequest) {
       client.release();
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Erro ao processar webhook InfinitePay.";
+    const message =
+      error instanceof Error ? error.message : "Erro ao processar webhook InfinitePay.";
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 }

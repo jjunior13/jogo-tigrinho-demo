@@ -16,10 +16,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: "order_nsu obrigatório." }, { status: 400 });
     }
 
-    const depQuery = await db.query(`SELECT id, player_id, amount_cents::text, status, transaction_nsu, invoice_slug
+    const depQuery = await db.query(
+      `SELECT id, player_id, amount_cents::text, status, transaction_nsu, invoice_slug
        FROM infinitepay_deposits
        WHERE order_nsu = $1
-       LIMIT 1`, [orderNsu]);
+       LIMIT 1`,
+      [orderNsu]
+    );
 
     const dep = depQuery.rows[0] as
       | {
@@ -31,6 +34,7 @@ export async function POST(req: NextRequest) {
           invoice_slug: string | null;
         }
       | undefined;
+
     if (!dep) {
       return NextResponse.json({ ok: false, error: "Pedido não encontrado." }, { status: 404 });
     }
@@ -50,6 +54,7 @@ export async function POST(req: NextRequest) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Accept: "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
@@ -69,23 +74,29 @@ export async function POST(req: NextRequest) {
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
-      const locked = await client.query<{ status: string; amount_cents: string }>(
+      const lockedRes = await client.query(
         `SELECT status, amount_cents::text FROM infinitepay_deposits WHERE id = $1 FOR UPDATE`,
         [dep.id]
       );
-      if (locked.rows[0]?.status === "PENDING") {
-        const creditCents = Number(locked.rows[0].amount_cents);
+      const locked = lockedRes.rows[0] as { status: string; amount_cents: string } | undefined;
+
+      if (locked?.status === "PENDING") {
+        const creditCents = Number(locked.amount_cents);
         const paidAmountCents =
-          typeof checkData.paid_amount === "number" ? Math.round(checkData.paid_amount) : creditCents;
+          typeof checkData.paid_amount === "number"
+            ? Math.round(checkData.paid_amount)
+            : creditCents;
+
         await client.query(
           `UPDATE infinitepay_deposits
            SET status = 'PAID',
                paid_amount_cents = $1,
                capture_method = COALESCE($2, capture_method),
                paid_at = NOW()
-           WHERE id = $3`,
+           WHERE id = $3 AND status = 'PENDING'`,
           [paidAmountCents, checkData.capture_method ?? null, dep.id]
         );
+
         await client.query(
           `UPDATE players
            SET balance_cents = balance_cents + $1,
@@ -109,7 +120,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true, paid: true, player: playerRes.rows[0] ?? null });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Erro ao verificar pagamento.";
+    const message =
+      error instanceof Error ? error.message : "Erro ao verificar pagamento.";
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 }
