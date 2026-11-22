@@ -2,8 +2,6 @@ import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getOrCreatePlayer, registerSpin } from "@/lib/game-db";
 
-export const runtime = "nodejs";
-
 const SYMBOLS = ["🐯", "🪙", "🧧", "🍊", "🧨", "💎"] as const;
 
 function rollGrid() {
@@ -16,7 +14,6 @@ function rollGrid() {
 }
 
 function evaluateGrid(grid: string[], betCents: number) {
-  // Linha do meio (índices 3, 4, 5)
   const middleRow = [grid[3], grid[4], grid[5]];
   const allMatch = middleRow[0] === middleRow[1] && middleRow[1] === middleRow[2];
 

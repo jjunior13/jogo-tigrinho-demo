@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { pool } from "@/lib/db";
 import { getOrCreatePlayer } from "@/lib/game-db";
 
-export const runtime = "nodejs";
-
 export async function GET(req: NextRequest) {
   try {
     const username = req.nextUrl.searchParams.get("username") || "jogador_demo";

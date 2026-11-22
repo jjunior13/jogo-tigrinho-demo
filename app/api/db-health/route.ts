@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { pool } from "@/lib/db";
 
-export const runtime = "nodejs";
-
 export async function GET() {
   try {
     const result = await pool.query(
