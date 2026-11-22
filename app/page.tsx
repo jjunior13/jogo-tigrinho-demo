@@ -19,6 +19,7 @@ interface PlayerInfo {
 }
 
 const SESSION_STORAGE_KEY = "tigrinho_brasil_player_v1";
+const PENDING_VERIFY_KEY = "tigrinho_brasil_pending_verify_v1";
 const SYMBOLS = ["🐯", "🪙", "🧧", "🍊", "🧨", "💎"];
 const INITIAL_GRID = ["🐯", "🪙", "🧧", "🐯", "🐯", "🐯", "🍊", "🧨", "💎"];
 const BET_OPTIONS = [100, 500, 1000, 2000];
@@ -231,10 +232,55 @@ export default function HomePage() {
       }
     }
     restoreSession();
+    try {
+      const pendingRaw =
+        window.sessionStorage.getItem(PENDING_VERIFY_KEY) ||
+        window.localStorage.getItem(PENDING_VERIFY_KEY);
+      if (pendingRaw) {
+        const pending = JSON.parse(pendingRaw) as {
+          mode?: "login" | "register";
+          step?: "form" | "code";
+          email?: string;
+          notice?: string;
+        };
+        if (pending?.mode === "register" && pending?.step === "code" && pending?.email) {
+          if (active) {
+            setMode("register");
+            setStep("code");
+            setEmail(pending.email);
+            if (pending.notice) {
+              setAuthNotice(pending.notice);
+            }
+          }
+        }
+      }
+    } catch {
+      // ignora erro de leitura de storage
+    }
     return () => {
       active = false;
     };
   }, [syncPlayerFromServer]);
+
+  useEffect(() => {
+    try {
+      if (!player && mode === "register" && step === "code" && email) {
+        const payload = JSON.stringify({
+          mode,
+          step,
+          email,
+          notice: authNotice || "Enviamos uma mensagem de boas-vindas com o código de 6 dígitos para o seu e-mail.",
+        });
+        window.sessionStorage.setItem(PENDING_VERIFY_KEY, payload);
+        window.localStorage.setItem(PENDING_VERIFY_KEY, payload);
+      } else if (player || step === "form") {
+        window.sessionStorage.removeItem(PENDING_VERIFY_KEY);
+        window.localStorage.removeItem(PENDING_VERIFY_KEY);
+      }
+    } catch {
+      // ignora erro de escrita de storage
+    }
+  }, [player, mode, step, email, authNotice]);
 
   function handleLogout() {
     window.localStorage.removeItem(SESSION_STORAGE_KEY);
@@ -320,6 +366,12 @@ export default function HomePage() {
       setPassword("");
       setCode("");
       setStep("form");
+      try {
+        window.sessionStorage.removeItem(PENDING_VERIFY_KEY);
+        window.localStorage.removeItem(PENDING_VERIFY_KEY);
+      } catch {
+        // ignora erro de storage
+      }
       await syncPlayerFromServer(data.player.username);
     } catch {
       setAuthError("Erro de rede ao validar código.");
