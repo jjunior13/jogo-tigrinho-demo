@@ -1164,7 +1164,31 @@ setPlayer(data.player);
             </ul>
           )}
         </div>
-      </div>
+      
+              <div className="pt-3 border-t border-yellow-400/20 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs font-extrabold text-yellow-300">Saque via PIX</div>
+                  <div className="text-[11px] text-emerald-200/80">
+                    Saldo disponível: <span className="font-bold text-white">{formatBRL(Number(player?.balance_cents ?? 0))}</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowProfileModal(false);
+                    setWithdrawError("");
+                    setWithdrawSuccess("");
+                    setShowWithdrawModal(true);
+                    if (player?.username) {
+                      void loadWithdrawHistory(player.username);
+                    }
+                  }}
+                  className="shrink-0 rounded-xl bg-amber-400 hover:bg-amber-300 px-4 py-2 text-xs font-black text-blue-950 transition cursor-pointer"
+                >
+                  Sacar
+                </button>
+              </div>
+            </div>
         {showProfileModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
             <div className="w-full max-w-md rounded-2xl border border-yellow-400/40 bg-blue-950 p-5 text-yellow-100 shadow-2xl space-y-4">
