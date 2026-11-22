@@ -294,13 +294,7 @@ export default function HomePage() {
         return;
       }
       setStep("code");
-      if (data.devCode) {
-        setAuthNotice(
-          `Código gerado (modo demo sem RESEND_API_KEY): ${data.devCode}`
-        );
-      } else {
-        setAuthNotice("Enviamos um código de 6 dígitos para o seu e-mail.");
-      }
+      setAuthNotice("Enviamos uma mensagem de boas-vindas com o código de 6 dígitos para o seu e-mail.");
     } catch {
       setAuthError("Erro de rede ao solicitar código.");
     } finally {

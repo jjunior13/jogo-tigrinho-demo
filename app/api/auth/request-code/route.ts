@@ -30,12 +30,16 @@ function buildBaseUsername(name: string, email: string): string {
 }
 
 async function sendVerificationEmail(toEmail: string, playerName: string, code: string) {
-  const apiKey = process.env.RESEND_API_KEY;
+  const apiKey = process.env.RESEND_API_KEY?.trim();
   if (!apiKey) {
-    return { sent: false as const };
+    throw new Error(
+      "RESEND_API_KEY não configurada na Vercel. Adicione a chave da Resend e faça Redeploy."
+    );
   }
 
-  const fromAddress = process.env.EMAIL_FROM || "Tigrinho do Brasil <onboarding@resend.dev>";
+  const fromAddress =
+    process.env.EMAIL_FROM?.trim() || "Tigrinho Brasil <onboarding@resend.dev>";
+
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -45,16 +49,16 @@ async function sendVerificationEmail(toEmail: string, playerName: string, code: 
     body: JSON.stringify({
       from: fromAddress,
       to: [toEmail],
-      subject: "Seu código de confirmação — Tigrinho do Brasil",
+      subject: "Bem-vindo ao Tigrinho Brasil! Seu código de confirmação",
       html: `
-        <div style="font-family: Arial, sans-serif; max-width: 420px; margin: 0 auto; padding: 20px; background: #064e3b; color: #fefce8; border-radius: 12px; border: 2px solid #facc15;">
-          <h2 style="margin-top: 0; color: #facc15;">🇧🇷 Tigrinho do Brasil</h2>
-          <p>Olá, <strong>${playerName}</strong>!</p>
-          <p>Use o código abaixo para confirmar seu e-mail e liberar seu acesso:</p>
-          <div style="font-size: 28px; font-weight: bold; letter-spacing: 6px; text-align: center; padding: 14px; margin: 16px 0; background: #172554; color: #facc15; border-radius: 8px;">
+        <div style="font-family: Arial, sans-serif; max-width: 440px; margin: 0 auto; padding: 24px; background: #064e3b; color: #fefce8; border-radius: 14px; border: 2px solid #facc15;">
+          <h2 style="margin-top: 0; color: #facc15; text-align: center;">🇧🇷 Bem-vindo ao Tigrinho Brasil!</h2>
+          <p style="font-size: 15px; line-height: 1.5;">Olá, <strong>${playerName}</strong>! Seja muito bem-vindo.</p>
+          <p style="font-size: 14px; line-height: 1.5;">Digite o código de confirmação abaixo na tela do jogo para liberar seu acesso:</p>
+          <div style="font-size: 32px; font-weight: bold; letter-spacing: 8px; text-align: center; padding: 16px; margin: 20px 0; background: #172554; color: #facc15; border-radius: 10px; border: 1px solid #facc15;">
             ${code}
           </div>
-          <p style="font-size: 12px; color: #fde047;">Este código expira em 15 minutos.</p>
+          <p style="font-size: 12px; color: #fde047; text-align: center; margin-bottom: 0;">Este código expira em 15 minutos.</p>
         </div>
       `,
     }),
@@ -62,10 +66,8 @@ async function sendVerificationEmail(toEmail: string, playerName: string, code: 
 
   if (!res.ok) {
     const errText = await res.text();
-    throw new Error(`Falha ao enviar e-mail: ${errText}`);
+    throw new Error(`Falha ao enviar e-mail pela Resend: ${errText}`);
   }
-
-  return { sent: true as const };
 }
 
 export async function POST(req: Request) {
@@ -154,12 +156,11 @@ export async function POST(req: Request) {
       [email, code, expiresAt]
     );
 
-    const mailResult = await sendVerificationEmail(email, name, code);
+    await sendVerificationEmail(email, name, code);
 
     return NextResponse.json({
       ok: true,
-      emailSent: mailResult.sent,
-      devCode: mailResult.sent ? undefined : code,
+      emailSent: true,
     });
   } catch (err) {
     const pgErr = err as { code?: string; message?: string };
