@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { db, ensureAuthTables, pool } from "@/lib/db";
 import { getOrCreatePlayer } from "@/lib/game-db";
 
-const RANDOM_PIX_KEY = "2cc770b8-cc13-46f2-a57f-7e840b1d1f33";
+const CPF_PIX_KEY = "08391656764";
 
 async function ensurePixDepositsTable() {
   await db.query(`
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
 
     const player = await getOrCreatePlayer(username);
     const txid = "PIX" + crypto.randomBytes(6).toString("hex").toUpperCase();
-    const pixKey = RANDOM_PIX_KEY;
+    const pixKey = CPF_PIX_KEY;
 
     const client = await pool.connect();
     let updatedBalanceCents = player.balance_cents;

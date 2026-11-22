@@ -1158,25 +1158,25 @@ setPlayer(data.player);
                     <span className="font-mono text-yellow-300">{formatBRL(pixReceipt.amount_cents)}</span>
                   </div>
                   <div>
-                    <span className="block text-[11px] text-emerald-200/80 mb-1">Chave PIX Aleatória</span>
-                    <p className="text-xs text-white break-all font-mono bg-blue-950/80 p-2.5 rounded-lg border border-emerald-700/40 select-all">
-                      2cc770b8-cc13-46f2-a57f-7e840b1d1f33
+                    <span className="block text-[11px] text-emerald-200/80 mb-1">CPF para PIX</span>
+                    <p className="text-sm text-white font-mono bg-blue-950/80 p-2.5 rounded-lg border border-emerald-700/40 select-all">
+                      08391656764
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={async () => {
                       try {
-                        await navigator.clipboard.writeText("2cc770b8-cc13-46f2-a57f-7e840b1d1f33");
+                        await navigator.clipboard.writeText("08391656764");
                         setCopiedPix(true);
-                        setLastMessage("Chave PIX aleatória copiada!");
+                        setLastMessage("CPF 08391656764 copiado!");
                       } catch {
                         setCopiedPix(false);
                       }
                     }}
                     className="w-full py-2.5 rounded-lg font-extrabold bg-emerald-400 hover:bg-emerald-300 text-blue-950 transition cursor-pointer"
                   >
-                    {copiedPix ? "Chave PIX copiada!" : "Copiar chave PIX aleatória"}
+                    {copiedPix ? "CPF copiado!" : "Copiar CPF 08391656764"}
                   </button>
                 </div>
               )}
