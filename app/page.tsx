@@ -294,7 +294,6 @@ function columnsToGrid(cols: [string, string, string][]): string[] {
 
 export default function HomePage() {
   const [player, setPlayer] = useState<PlayerInfo | null>(null);
-  const [devCode, setDevCode] = useState<string | null>(null);
 const [checkingSession, setCheckingSession] = useState<boolean>(true);
 
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -333,7 +332,6 @@ const [checkingSession, setCheckingSession] = useState<boolean>(true);
     if (!res.ok || !data?.ok || !data?.player) {
       throw new Error(data?.error || "Não foi possível sincronizar o jogador.");
     }
-    if (data?.devCode) { setDevCode(String(data.devCode)); }
 setPlayer(data.player);
     setRecentSpins(data.recentSpins || []);
     window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(data.player));
@@ -401,7 +399,7 @@ setPlayer(data.player);
           email,
           notice:
             authNotice ||
-            "Enviamos uma mensagem de boas-vindas com o código de 6 dígitos para o seu e-mail.",
+            "Cadastro direto sem confirmação por e-mail.",
         });
         window.sessionStorage.setItem(PENDING_VERIFY_KEY, payload);
         window.localStorage.setItem(PENDING_VERIFY_KEY, payload);
@@ -450,57 +448,25 @@ setPlayer(data.player);
     }
   }
 
-  async function handleRequestCode(e: FormEvent) {
+    async function handleRegisterSubmit(e: FormEvent) {
     e.preventDefault();
     setAuthError("");
     setAuthNotice("");
     setAuthLoading(true);
     try {
-      const res = await fetch("/api/auth/request-code", {
+      const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: fullName,
+          fullName,
           email,
           phone,
           password,
         }),
       });
       const data = await res.json();
-      if (!res.ok || !data?.ok) {
-        setAuthError(data?.error || "Não foi possível enviar o código.");
-        return;
-      }
-      setStep("code");
-      if (data?.devCode) {
-        const receivedCode = String(data.devCode);
-        setDevCode(receivedCode);
-        setCode(receivedCode);
-        setAuthNotice(`SMTP bloqueado na Vercel — código de teste gerado: ${receivedCode}`);
-      } else {
-        setDevCode(null);
-        setAuthNotice("Enviamos uma mensagem de boas-vindas com o código de 6 dígitos para o seu e-mail.");
-      }
-    } catch {
-      setAuthError("Erro de rede ao solicitar código.");
-    } finally {
-      setAuthLoading(false);
-    }
-  }
-
-  async function handleVerifyCode(e: FormEvent) {
-    e.preventDefault();
-    setAuthError("");
-    setAuthLoading(true);
-    try {
-      const res = await fetch("/api/auth/verify-code", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, code }),
-      });
-      const data = await res.json();
       if (!res.ok || !data?.ok || !data?.player) {
-        setAuthError(data?.error || "Código inválido.");
+        setAuthError(data?.error || "Não foi possível concluir o cadastro.");
         return;
       }
       setPassword("");
@@ -514,7 +480,7 @@ setPlayer(data.player);
       }
       await syncPlayerFromServer(data.player.username);
     } catch {
-      setAuthError("Erro de rede ao validar código.");
+      setAuthError("Erro de rede ao tentar cadastrar.");
     } finally {
       setAuthLoading(false);
     }
@@ -743,8 +709,8 @@ setPlayer(data.player);
                 {authLoading ? "Entrando..." : "Entrar no Tigrinho do Brasil"}
               </button>
             </form>
-          ) : step === "form" ? (
-            <form onSubmit={handleRequestCode} className="space-y-3">
+          ) : (
+            <form onSubmit={handleRegisterSubmit} className="space-y-3">
               <div className="space-y-1">
                 <label className="block text-xs font-semibold text-yellow-200">Nome completo</label>
                 <input
@@ -803,46 +769,7 @@ setPlayer(data.player);
                 disabled={authLoading}
                 className="w-full py-3 rounded-xl font-extrabold text-blue-950 bg-gradient-to-r from-yellow-300 via-yellow-400 to-amber-300 hover:from-yellow-200 hover:to-yellow-300 disabled:opacity-50 transition cursor-pointer shadow-lg"
               >
-                {authLoading ? "Enviando código..." : "Enviar código de confirmação"}
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleVerifyCode} className="space-y-4">
-              {devCode && (
-                <div className="rounded-lg border border-yellow-400 bg-yellow-300/95 px-3 py-2 text-center text-xs font-extrabold text-emerald-950">
-                  SMTP indisponível na Vercel — Código de teste: <span className="font-mono text-sm tracking-widest">{devCode}</span>
-                </div>
-              )}
-              <div className="space-y-1">
-                <label className="block text-xs font-semibold text-yellow-200">
-                  Código de 6 dígitos enviado para {email}
-                </label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={6}
-                  required
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-                  placeholder="000000"
-                  className="w-full rounded-lg border border-yellow-400/70 bg-blue-950/85 px-3 py-2.5 text-center text-lg font-mono tracking-widest text-yellow-300 focus:outline-none"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={authLoading}
-                className="w-full py-3 rounded-xl font-extrabold text-blue-950 bg-gradient-to-r from-yellow-300 via-yellow-400 to-amber-300 hover:from-yellow-200 hover:to-yellow-300 disabled:opacity-50 transition cursor-pointer shadow-lg"
-              >
-                {authLoading ? "Confirmando..." : "Confirmar e-mail e entrar"}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setStep("form")}
-                className="w-full py-2 text-xs text-emerald-200 hover:text-yellow-200 cursor-pointer"
-              >
-                Voltar e alterar dados
+                {authLoading ? "Cadastrando..." : "Cadastrar e entrar"}
               </button>
             </form>
           )}
