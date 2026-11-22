@@ -294,7 +294,8 @@ function columnsToGrid(cols: [string, string, string][]): string[] {
 
 export default function HomePage() {
   const [player, setPlayer] = useState<PlayerInfo | null>(null);
-  const [checkingSession, setCheckingSession] = useState<boolean>(true);
+  const [devCode, setDevCode] = useState<string | null>(null);
+const [checkingSession, setCheckingSession] = useState<boolean>(true);
 
   const [mode, setMode] = useState<"login" | "register">("login");
   const [step, setStep] = useState<"form" | "code">("form");
@@ -332,7 +333,8 @@ export default function HomePage() {
     if (!res.ok || !data?.ok || !data?.player) {
       throw new Error(data?.error || "Não foi possível sincronizar o jogador.");
     }
-    setPlayer(data.player);
+    if (data?.devCode) { setDevCode(String(data.devCode)); }
+setPlayer(data.player);
     setRecentSpins(data.recentSpins || []);
     window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(data.player));
   }, []);
@@ -703,6 +705,7 @@ export default function HomePage() {
 
           {mode === "login" ? (
             <form onSubmit={handleLoginSubmit} className="space-y-4">
+{devCode && (<div style={{ margin: "10px 0", padding: "10px", borderRadius: "8px", background: "#fef08a", color: "#064e3b", fontWeight: "bold", textAlign: "center" }}>SMTP indisponível na Vercel — Código de teste: {devCode}</div>)}
               <div className="space-y-1">
                 <label className="block text-xs font-semibold text-yellow-200">E-mail</label>
                 <input
