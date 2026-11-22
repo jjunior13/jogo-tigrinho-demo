@@ -669,7 +669,7 @@ setPlayer(data.player);
 
   if (checkingSession) {
     return (
-      <main className="min-h-screen bg-gradient-to-b from-emerald-950 via-green-950 to-blue-950 text-yellow-200 flex items-center justify-center p-6">
+      <main className="min-h-screen bg-gradient-to-b from-emerald-950 via-green-950 to-blue-950 text-yellow-200 flex items-center justify-center p-6 overflow-x-hidden max-w-full">
         <div className="rounded-2xl border-2 border-yellow-400/50 bg-emerald-950/90 px-6 py-4 text-sm font-semibold">
           🇧🇷 Verificando acesso ao Tigrinho do Brasil...
         </div>
@@ -679,7 +679,7 @@ setPlayer(data.player);
 
   if (!player) {
     return (
-      <main className="min-h-screen bg-gradient-to-b from-emerald-950 via-green-950 to-blue-950 text-amber-50 flex flex-col items-center justify-center p-6">
+      <main className="min-h-screen bg-gradient-to-b from-emerald-950 via-green-950 to-blue-950 text-amber-50 flex flex-col items-center justify-center p-6 overflow-x-hidden max-w-full">
         <div className="w-full max-w-md rounded-2xl border-2 border-yellow-400/60 bg-emerald-950/95 p-6 shadow-2xl shadow-blue-950/80 space-y-5">
           <div className="text-center space-y-1 border-b border-yellow-400/25 pb-4">
             <h1 className="text-2xl font-extrabold tracking-wide text-yellow-300">
@@ -848,7 +848,7 @@ setPlayer(data.player);
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-emerald-950 via-green-950 to-blue-950 text-amber-50 flex flex-col items-center justify-center p-6">
+    <main className="min-h-screen bg-gradient-to-b from-emerald-950 via-green-950 to-blue-950 text-amber-50 flex flex-col items-center justify-center p-6 overflow-x-hidden max-w-full">
       <div className="w-full max-w-md rounded-2xl border-2 border-yellow-400/60 bg-emerald-950/90 p-6 shadow-2xl shadow-blue-950/70 space-y-5">
         <div className="flex items-center justify-between border-b border-yellow-400/25 pb-4">
           <div>
