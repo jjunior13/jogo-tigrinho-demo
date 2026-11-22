@@ -17,23 +17,25 @@ const LINE_PAYOUT_MULTIPLIER: Record<GameSymbol, number> = {
 interface PaylineDef {
   id: string;
   label: string;
-  orientation: "horizontal" | "vertical";
+  orientation: "horizontal" | "vertical" | "diagonal";
   indices: [number, number, number];
 }
 
 const PAYLINES: PaylineDef[] = [
-  { id: "row-0", label: "Linha Topo", orientation: "horizontal", indices: [0, 1, 2], [3, 4, 5], [6, 7, 8], [0, 3, 6], [1, 4, 7], [2, 5, 8], [0, 4, 8], [2, 4, 6] },
+  { id: "row-0", label: "Linha Topo", orientation: "horizontal", indices: [0, 1, 2] },
   { id: "row-1", label: "Linha Meio", orientation: "horizontal", indices: [3, 4, 5] },
   { id: "row-2", label: "Linha Base", orientation: "horizontal", indices: [6, 7, 8] },
   { id: "col-0", label: "Coluna Esquerda", orientation: "vertical", indices: [0, 3, 6] },
   { id: "col-1", label: "Coluna Centro", orientation: "vertical", indices: [1, 4, 7] },
   { id: "col-2", label: "Coluna Direita", orientation: "vertical", indices: [2, 5, 8] },
+  { id: "diag-0", label: "Diagonal Principal", orientation: "diagonal", indices: [0, 4, 8] },
+  { id: "diag-1", label: "Diagonal Secundária", orientation: "diagonal", indices: [2, 4, 6] },
 ];
 
 export interface WinningLineResult {
   id: string;
   label: string;
-  orientation: "horizontal" | "vertical";
+  orientation: "horizontal" | "vertical" | "diagonal";
   indices: [number, number, number];
   symbol: GameSymbol;
   multiplier: number;
