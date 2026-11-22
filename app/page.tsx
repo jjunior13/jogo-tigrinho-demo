@@ -18,11 +18,33 @@ interface PlayerInfo {
   balance_cents: string;
 }
 
+interface WinningLineOverlay {
+  id: string;
+  label: string;
+  orientation: "horizontal" | "vertical";
+  indices: [number, number, number];
+  symbol: string;
+  multiplier: number;
+  payoutCents: number;
+}
+
 const SESSION_STORAGE_KEY = "tigrinho_brasil_player_v1";
 const PENDING_VERIFY_KEY = "tigrinho_brasil_pending_verify_v1";
-const SYMBOLS = ["🐯", "🪙", "🧧", "🍊", "🧨", "💎"];
+const SYMBOLS = ["🐯", "💎", "🧧", "🪙", "🍊", "🧨"];
 const INITIAL_GRID = ["🐯", "🪙", "🧧", "🐯", "🐯", "🐯", "🍊", "🧨", "💎"];
 const BET_OPTIONS = [100, 500, 1000, 2000];
+
+const LINE_COORDS: Record<
+  string,
+  { x1: number; y1: number; x2: number; y2: number; stroke: string }
+> = {
+  "row-0": { x1: 24, y1: 54, x2: 336, y2: 54, stroke: "#fde047" },
+  "row-1": { x1: 24, y1: 150, x2: 336, y2: 150, stroke: "#4ade80" },
+  "row-2": { x1: 24, y1: 246, x2: 336, y2: 246, stroke: "#38bdf8" },
+  "col-0": { x1: 62, y1: 20, x2: 62, y2: 280, stroke: "#fde047" },
+  "col-1": { x1: 180, y1: 20, x2: 180, y2: 280, stroke: "#4ade80" },
+  "col-2": { x1: 298, y1: 20, x2: 298, y2: 280, stroke: "#38bdf8" },
+};
 
 function formatBRL(centsStr: string | number) {
   const cents = typeof centsStr === "string" ? Number(centsStr) : centsStr;
@@ -58,22 +80,39 @@ function useSlotSound() {
     getContext();
   }, [getContext]);
 
+  // Som de rolagem mais alto, encorpado e divertido (estilo marimba/arcade alegre)
   const playReelTick = useCallback(
-    (pitchMultiplier = 1) => {
+    (stepIndex: number) => {
       const ctx = getContext();
       if (!ctx) return;
       const now = ctx.currentTime;
-      const osc = ctx.createOscillator();
+      const scale = [523.25, 587.33, 659.25, 783.99, 880.0, 1046.5];
+      const baseFreq = scale[stepIndex % scale.length];
+
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.type = "triangle";
-      osc.frequency.setValueAtTime(520 * pitchMultiplier, now);
-      osc.frequency.exponentialRampToValueAtTime(160 * pitchMultiplier, now + 0.035);
-      gain.gain.setValueAtTime(0.08, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
-      osc.connect(gain);
+
+      osc1.type = "triangle";
+      osc1.frequency.setValueAtTime(baseFreq, now);
+      osc1.frequency.exponentialRampToValueAtTime(baseFreq * 1.25, now + 0.055);
+
+      osc2.type = "square";
+      osc2.frequency.setValueAtTime(baseFreq * 0.5, now);
+      osc2.frequency.exponentialRampToValueAtTime(baseFreq * 0.75, now + 0.055);
+
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.linearRampToValueAtTime(0.22, now + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.002, now + 0.065);
+
+      osc1.connect(gain);
+      osc2.connect(gain);
       gain.connect(ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.042);
+
+      osc1.start(now);
+      osc2.start(now);
+      osc1.stop(now + 0.07);
+      osc2.stop(now + 0.07);
     },
     [getContext]
   );
@@ -83,40 +122,64 @@ function useSlotSound() {
       const ctx = getContext();
       if (!ctx) return;
       const now = ctx.currentTime;
+      const stopNotes = [440, 554.37, 659.25];
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(210 + colIndex * 45, now);
-      osc.frequency.exponentialRampToValueAtTime(75, now + 0.09);
-      gain.gain.setValueAtTime(0.18, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.095);
+
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(stopNotes[colIndex % stopNotes.length], now);
+      osc.frequency.exponentialRampToValueAtTime(stopNotes[colIndex % stopNotes.length] * 1.15, now + 0.09);
+
+      gain.gain.setValueAtTime(0.24, now);
+      gain.gain.exponentialRampToValueAtTime(0.002, now + 0.11);
+
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start(now);
-      osc.stop(now + 0.1);
+      osc.stop(now + 0.12);
     },
     [getContext]
   );
 
+  // Fanfarra alegre e vibrante ao completar sequência na horizontal ou vertical
   const playWinFanfare = useCallback(() => {
     const ctx = getContext();
     if (!ctx) return;
     const now = ctx.currentTime;
-    const notes = [523.25, 659.25, 783.99, 1046.5, 783.99, 1046.5];
-    notes.forEach((freq, i) => {
-      const start = now + i * 0.085;
-      const dur = i === notes.length - 1 ? 0.28 : 0.11;
+    const melody = [
+      { freq: 523.25, offset: 0.0, dur: 0.11 },
+      { freq: 659.25, offset: 0.09, dur: 0.11 },
+      { freq: 783.99, offset: 0.18, dur: 0.11 },
+      { freq: 1046.5, offset: 0.27, dur: 0.18 },
+      { freq: 880.0, offset: 0.44, dur: 0.12 },
+      { freq: 1046.5, offset: 0.55, dur: 0.14 },
+      { freq: 1318.5, offset: 0.68, dur: 0.34 },
+    ];
+
+    melody.forEach((n) => {
+      const start = now + n.offset;
       const osc = ctx.createOscillator();
+      const harm = ctx.createOscillator();
       const gain = ctx.createGain();
+
       osc.type = "triangle";
-      osc.frequency.setValueAtTime(freq, start);
+      osc.frequency.setValueAtTime(n.freq, start);
+
+      harm.type = "sine";
+      harm.frequency.setValueAtTime(n.freq * 1.5, start);
+
       gain.gain.setValueAtTime(0.001, start);
-      gain.gain.linearRampToValueAtTime(0.14, start + 0.015);
-      gain.gain.exponentialRampToValueAtTime(0.001, start + dur);
+      gain.gain.linearRampToValueAtTime(0.25, start + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.002, start + n.dur);
+
       osc.connect(gain);
+      harm.connect(gain);
       gain.connect(ctx.destination);
+
       osc.start(start);
-      osc.stop(start + dur + 0.02);
+      harm.start(start);
+      osc.stop(start + n.dur + 0.02);
+      harm.stop(start + n.dur + 0.02);
     });
   }, [getContext]);
 
@@ -129,7 +192,7 @@ function useSlotSound() {
     osc.type = "sine";
     osc.frequency.setValueAtTime(240, now);
     osc.frequency.exponentialRampToValueAtTime(140, now + 0.16);
-    gain.gain.setValueAtTime(0.07, now);
+    gain.gain.setValueAtTime(0.09, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.17);
     osc.connect(gain);
     gain.connect(ctx.destination);
@@ -168,7 +231,6 @@ export default function HomePage() {
   const [player, setPlayer] = useState<PlayerInfo | null>(null);
   const [checkingSession, setCheckingSession] = useState<boolean>(true);
 
-  // Estados da tela de Login / Cadastro / Código
   const [mode, setMode] = useState<"login" | "register">("login");
   const [step, setStep] = useState<"form" | "code">("form");
   const [fullName, setFullName] = useState<string>("");
@@ -180,7 +242,6 @@ export default function HomePage() {
   const [authNotice, setAuthNotice] = useState<string>("");
   const [authLoading, setAuthLoading] = useState<boolean>(false);
 
-  // Estados do jogo (só exibidos após autenticar)
   const [reels, setReels] = useState<ReelState[]>(() =>
     gridToColumns(INITIAL_GRID).map((symbols) => ({
       symbols,
@@ -188,6 +249,8 @@ export default function HomePage() {
       dropOffset: false,
     }))
   );
+  const [winningLines, setWinningLines] = useState<WinningLineOverlay[]>([]);
+  const [excellentBanner, setExcellentBanner] = useState<string>("");
   const [betCents, setBetCents] = useState<number>(500);
   const [recentSpins, setRecentSpins] = useState<SpinItem[]>([]);
   const [lastMessage, setLastMessage] = useState<string>("Pronto para girar.");
@@ -269,7 +332,9 @@ export default function HomePage() {
           mode,
           step,
           email,
-          notice: authNotice || "Enviamos uma mensagem de boas-vindas com o código de 6 dígitos para o seu e-mail.",
+          notice:
+            authNotice ||
+            "Enviamos uma mensagem de boas-vindas com o código de 6 dígitos para o seu e-mail.",
         });
         window.sessionStorage.setItem(PENDING_VERIFY_KEY, payload);
         window.localStorage.setItem(PENDING_VERIFY_KEY, payload);
@@ -340,7 +405,9 @@ export default function HomePage() {
         return;
       }
       setStep("code");
-      setAuthNotice("Enviamos uma mensagem de boas-vindas com o código de 6 dígitos para o seu e-mail.");
+      setAuthNotice(
+        "Enviamos uma mensagem de boas-vindas com o código de 6 dígitos para o seu e-mail."
+      );
     } catch {
       setAuthError("Erro de rede ao solicitar código.");
     } finally {
@@ -386,7 +453,9 @@ export default function HomePage() {
       unlockAudio();
     }
     setSpinning(true);
-    setLastMessage("Girando...");
+    setWinningLines([]);
+    setExcellentBanner("");
+    setLastMessage("Girando as bobinas...");
 
     setReels((prev) =>
       prev.map((r) => ({
@@ -400,7 +469,7 @@ export default function HomePage() {
     const tickInterval = window.setInterval(() => {
       tickCount += 1;
       if (!muted) {
-        playReelTick(0.9 + (tickCount % 5) * 0.06);
+        playReelTick(tickCount);
       }
 
       setReels((prev) =>
@@ -414,10 +483,10 @@ export default function HomePage() {
           };
         })
       );
-    }, 75);
+    }, 80);
 
     try {
-      const minSpinPromise = new Promise((resolve) => setTimeout(resolve, 650));
+      const minSpinPromise = new Promise((resolve) => setTimeout(resolve, 720));
       const fetchPromise = fetch("/api/spin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -440,7 +509,7 @@ export default function HomePage() {
       const finalCols = gridToColumns(finalGrid);
 
       for (let col = 0; col < 3; col++) {
-        await new Promise((resolve) => setTimeout(resolve, col === 0 ? 0 : 240));
+        await new Promise((resolve) => setTimeout(resolve, col === 0 ? 0 : 250));
         setReels((prev) =>
           prev.map((r, idx) =>
             idx === col
@@ -463,14 +532,19 @@ export default function HomePage() {
         window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(data.player));
       }
 
+      const lines: WinningLineOverlay[] = Array.isArray(data.winningLines) ? data.winningLines : [];
+      setWinningLines(lines);
+
       if (data.spin) {
         setRecentSpins((prev) => [data.spin, ...prev].slice(0, 10));
         const payout = Number(data.spin.payout_cents);
         if (payout > 0) {
-          setLastMessage(`Vitória! Prêmio de ${formatBRL(payout)} (${data.spin.outcome}).`);
+          setExcellentBanner(`Excelente! Ganhou ${formatBRL(payout)}`);
+          setLastMessage(`Excelente! Prêmio de ${formatBRL(payout)} (${data.spin.outcome}).`);
           if (!muted) playWinFanfare();
         } else {
-          setLastMessage(`Sem prêmio na linha do meio (${data.spin.outcome}).`);
+          setExcellentBanner("");
+          setLastMessage(`Sem sequência na horizontal ou vertical (${data.spin.outcome}).`);
           if (!muted) playLossSound();
         }
       }
@@ -493,7 +567,6 @@ export default function HomePage() {
     );
   }
 
-  // Tela de Login e Senha obrigatória antes de mostrar o jogo
   if (!player) {
     return (
       <main className="min-h-screen bg-gradient-to-b from-emerald-950 via-green-950 to-blue-950 text-amber-50 flex flex-col items-center justify-center p-6">
@@ -691,10 +764,16 @@ export default function HomePage() {
     );
   }
 
-  // Jogo só aparece após autenticar
+  const highlightedIndices = new Set<number>();
+  for (const line of winningLines) {
+    for (const idx of line.indices) {
+      highlightedIndices.add(idx);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-gradient-to-b from-emerald-950 via-green-950 to-blue-950 text-amber-50 flex flex-col items-center justify-center p-6">
-      <div className="w-full max-w-md rounded-2xl border-2 border-yellow-400/60 bg-emerald-950/90 p-6 shadow-2xl shadow-blue-950/70 space-y-6">
+      <div className="w-full max-w-md rounded-2xl border-2 border-yellow-400/60 bg-emerald-950/90 p-6 shadow-2xl shadow-blue-950/70 space-y-5">
         <div className="flex items-center justify-between border-b border-yellow-400/25 pb-4">
           <div>
             <h1 className="text-xl font-extrabold tracking-wide text-yellow-300">
@@ -729,10 +808,21 @@ export default function HomePage() {
           </div>
         </div>
 
+        {excellentBanner && (
+          <div className="rounded-xl border-2 border-yellow-300 bg-gradient-to-r from-emerald-800 via-green-700 to-blue-900 px-4 py-2.5 text-center shadow-lg animate-pulse">
+            <span className="block text-lg font-black tracking-wider text-yellow-300 uppercase">
+              🎉 Excelente! 🎉
+            </span>
+            <span className="block text-xs font-bold text-amber-100">{excellentBanner}</span>
+          </div>
+        )}
+
         <div className="relative grid grid-cols-3 gap-2 rounded-xl bg-blue-950/85 p-4 border-2 border-yellow-400/50 overflow-hidden">
           {reels.map((reel, colIdx) => (
             <div key={colIdx} className="flex flex-col gap-2 overflow-hidden">
               {reel.symbols.map((symbol, rowIdx) => {
+                const cellIndex = rowIdx * 3 + colIdx;
+                const isWinningCell = !spinning && highlightedIndices.has(cellIndex);
                 const isMiddleRow = rowIdx === 1;
                 return (
                   <div
@@ -742,12 +832,14 @@ export default function HomePage() {
                         ? `translateY(${reel.dropOffset ? "10px" : "-10px"})`
                         : "translateY(0px)",
                       transition: reel.spinning
-                        ? "transform 75ms linear"
+                        ? "transform 80ms linear"
                         : "transform 180ms cubic-bezier(0.22, 1, 0.36, 1)",
                     }}
                     className={`h-20 flex items-center justify-center rounded-lg text-3xl border select-none ${
-                      isMiddleRow
-                        ? "border-yellow-400 bg-yellow-400/20 shadow-inner"
+                      isWinningCell
+                        ? "border-yellow-300 bg-yellow-400/35 ring-2 ring-yellow-300 shadow-lg"
+                        : isMiddleRow
+                        ? "border-yellow-400/70 bg-yellow-400/15 shadow-inner"
                         : "border-emerald-700/60 bg-emerald-900/65"
                     }`}
                   >
@@ -757,6 +849,42 @@ export default function HomePage() {
               })}
             </div>
           ))}
+
+          {!spinning && winningLines.length > 0 && (
+            <svg
+              viewBox="0 0 360 300"
+              className="pointer-events-none absolute inset-0 h-full w-full p-4"
+              aria-hidden="true"
+            >
+              {winningLines.map((line) => {
+                const coords = LINE_COORDS[line.id];
+                if (!coords) return null;
+                return (
+                  <g key={line.id}>
+                    <line
+                      x1={coords.x1}
+                      y1={coords.y1}
+                      x2={coords.x2}
+                      y2={coords.y2}
+                      stroke="#0f172a"
+                      strokeWidth="9"
+                      strokeLinecap="round"
+                      opacity="0.7"
+                    />
+                    <line
+                      x1={coords.x1}
+                      y1={coords.y1}
+                      x2={coords.x2}
+                      y2={coords.y2}
+                      stroke={coords.stroke}
+                      strokeWidth="5.5"
+                      strokeLinecap="round"
+                    />
+                  </g>
+                );
+              })}
+            </svg>
+          )}
         </div>
 
         <div className="space-y-2">
