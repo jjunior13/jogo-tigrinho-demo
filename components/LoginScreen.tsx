@@ -18,6 +18,7 @@ export default function LoginScreen({ onAuthenticated }: LoginScreenProps) {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
+  const [devCode, setDevCode] = useState<string | null>(null);
   const [step, setStep] = useState<"form" | "verify">("form");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("Preencha seus dados para receber o código por e-mail.");
@@ -61,11 +62,15 @@ export default function LoginScreen({ onAuthenticated }: LoginScreenProps) {
         setErrorMsg(data.error || "Não foi possível enviar o código.");
       } else {
         setStep("verify");
-        setMessage(
-          data.devCode
-            ? `Código enviado para ${cleanEmail}. (Modo teste: ${data.devCode})`
-            : `Enviamos um código de confirmação para ${cleanEmail}.`
-        );
+        if (data?.devCode) {
+          const receivedCode = String(data.devCode);
+          setDevCode(receivedCode);
+          setCode(receivedCode);
+          setMessage(`SMTP indisponível na Vercel — Código de teste: ${receivedCode}`);
+        } else {
+          setDevCode(null);
+          setMessage(`Enviamos um código de confirmação para ${cleanEmail}.`);
+        }
       }
     } catch {
       setErrorMsg("Erro de conexão ao solicitar o código.");
