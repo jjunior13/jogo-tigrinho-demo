@@ -1152,17 +1152,11 @@ setPlayer(data.player);
               </form>
 
               {pixReceipt && (
-                <div className="space-y-2.5 rounded-xl border border-emerald-400/40 bg-emerald-950/40 p-3 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-emerald-300">PIX Confirmado ({pixReceipt.status})</span>
-                    <span className="font-mono text-yellow-300">{formatBRL(pixReceipt.amount_cents)}</span>
-                  </div>
-                  <div>
-                    <span className="block text-[11px] text-emerald-200/80 mb-1">CPF para PIX</span>
-                    <p className="text-sm text-white font-mono bg-blue-950/80 p-2.5 rounded-lg border border-emerald-700/40 select-all">
-                      08391656764
-                    </p>
-                  </div>
+                <div className="space-y-2.5 rounded-xl border border-emerald-400/40 bg-emerald-950/40 p-3 text-center">
+                  <span className="block text-xs text-emerald-200/80">CPF</span>
+                  <p className="text-base font-bold text-white font-mono bg-blue-950/80 p-2.5 rounded-lg border border-emerald-700/40 select-all">
+                    08391656764
+                  </p>
                   <button
                     type="button"
                     onClick={async () => {
@@ -1174,9 +1168,9 @@ setPlayer(data.player);
                         setCopiedPix(false);
                       }
                     }}
-                    className="w-full py-2.5 rounded-lg font-extrabold bg-emerald-400 hover:bg-emerald-300 text-blue-950 transition cursor-pointer"
+                    className="w-full py-2.5 rounded-lg font-extrabold bg-emerald-400 hover:bg-emerald-300 text-blue-950 transition cursor-pointer text-xs"
                   >
-                    {copiedPix ? "CPF copiado!" : "Copiar CPF 08391656764"}
+                    {copiedPix ? "CPF copiado!" : "Copiar CPF"}
                   </button>
                 </div>
               )}
