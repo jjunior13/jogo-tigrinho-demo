@@ -6,11 +6,11 @@ const SYMBOLS = ["🐯", "💎", "🧧", "🪙", "🍊", "🧨"] as const;
 type GameSymbol = (typeof SYMBOLS)[number];
 
 const LINE_PAYOUT_MULTIPLIER: Record<GameSymbol, number> = {
-  "🐯": 10,
-  "💎": 5,
-  "🧧": 3,
-  "🪙": 2,
-  "🍊": 1.5,
+  "🐯": 3,
+  "💎": 2.2,
+  "🧧": 1.8,
+  "🪙": 1.5,
+  "🍊": 1.2,
   "🧨": 1,
 };
 
@@ -40,13 +40,18 @@ export interface WinningLineResult {
   payoutCents: number;
 }
 
+const WIN_CHANCE = Number(process.env.SPIN_WIN_CHANCE ?? "0.12");
+const FULL_GRID_CHANCE = Number(process.env.SPIN_FULL_GRID_CHANCE ?? "0.003");
+const MIN_SPINS_BETWEEN_WINS = Number(process.env.SPIN_MIN_SPINS_BETWEEN_WINS ?? "6");
+const MIN_SECONDS_BETWEEN_WINS = Number(process.env.SPIN_MIN_SECONDS_BETWEEN_WINS ?? "20");
+
 function randomWeightedSymbol(): GameSymbol {
   const r = Math.random();
-  if (r < 0.10) return "🐯";
-  if (r < 0.22) return "💎";
-  if (r < 0.38) return "🧧";
-  if (r < 0.58) return "🪙";
-  if (r < 0.78) return "🍊";
+  if (r < 0.05) return "🐯";
+  if (r < 0.14) return "💎";
+  if (r < 0.28) return "🧧";
+  if (r < 0.48) return "🪙";
+  if (r < 0.72) return "🍊";
   return "🧨";
 }
 
@@ -81,17 +86,95 @@ function hasFullGridMatch(grid: GameSymbol[]): GameSymbol | null {
   return nonWilds.every((s) => s === target) ? target : null;
 }
 
-function generateGrid(betCents: number) {
+function hasAnyWin(grid: GameSymbol[]): boolean {
+  const lineWin = PAYLINES.some((line) => {
+    const [a, b, c] = line.indices.map((idx) => grid[idx]);
+    const nonWilds = [a, b, c].filter((s) => s !== "🐯");
+    if (nonWilds.length === 0) return true;
+    return nonWilds.every((s) => s === nonWilds[0]);
+  });
+  return lineWin || hasFullGridMatch(grid) !== null;
+}
+
+function generateNonWinningGrid(): GameSymbol[] {
+  // Garante que nenhuma linha horizontal/vertical feche par/trinca e não feche grade cheia
+  const safePatterns: GameSymbol[][] = [
+    ["🧨", "🍊", "🪙", "🧧", "💎", "🍊", "🪙", "🧨", "🧧"],
+    ["🍊", "🪙", "🧨", "💎", "🧧", "🪙", "🧨", "🍊", "💎"],
+    ["🪙", "🧨", "🍊", "🧧", "🪙", "💎", "🍊", "🧧", "🧨"],
+    ["🧧", "🍊", "🪙", "🧨", "💎", "🍊", "🪙", "🧨", "🍊"],
+    ["💎", "🪙", "🧧", "🍊", "🧨", "🪙", "🧧", "🍊", "🧨"],
+    ["🧨", "🧧", "🍊", "🪙", "🧨", "💎", "🍊", "🪙", "🧧"],
+  ];
+
+  for (let attempt = 0; attempt < 25; attempt++) {
+    const candidate = Array.from({ length: 9 }, () => randomWeightedSymbol());
+    // Evita múltiplos coringas (🐯) para não fechar linha por wild
+    const tigerCount = candidate.filter((s) => s === "🐯").length;
+    if (tigerCount <= 1 && !hasAnyWin(candidate)) {
+      return candidate;
+    }
+  }
+
+  return safePatterns[Math.floor(Math.random() * safePatterns.length)];
+}
+
+async function isPlayerInWinCooldown(playerId: number): Promise<boolean> {
+  if (MIN_SPINS_BETWEEN_WINS <= 0 && MIN_SECONDS_BETWEEN_WINS <= 0) {
+    return false;
+  }
+
+  const recentWinsRes = await db.query(
+    `SELECT id, created_at
+     FROM spins
+     WHERE player_id = $1 AND payout_cents > 0
+     ORDER BY id DESC
+     LIMIT 1`,
+    [playerId]
+  );
+
+  const lastWin = recentWinsRes.rows[0];
+  if (!lastWin) {
+    return false;
+  }
+
+  if (MIN_SECONDS_BETWEEN_WINS > 0) {
+    const elapsedSec = (Date.now() - new Date(lastWin.created_at).getTime()) / 1000;
+    if (elapsedSec < MIN_SECONDS_BETWEEN_WINS) {
+      return true;
+    }
+  }
+
+  if (MIN_SPINS_BETWEEN_WINS > 0) {
+    const spinsAfterWinRes = await db.query(
+      `SELECT COUNT(*)::text AS count
+       FROM spins
+       WHERE player_id = $1 AND id > $2`,
+      [playerId, lastWin.id]
+    );
+    const spinsSinceWin = Number(spinsAfterWinRes.rows[0]?.count ?? "0");
+    if (spinsSinceWin < MIN_SPINS_BETWEEN_WINS) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+async function generateGrid(betCents: number, playerId: number) {
+  const inCooldown = await isPlayerInWinCooldown(playerId);
+  const effectiveWinChance = inCooldown ? 0 : Math.max(0, Math.min(1, WIN_CHANCE));
   const roll = Math.random();
-  if (roll < 0.02) {
+
+  if (!inCooldown && roll < Math.max(0, Math.min(1, FULL_GRID_CHANCE))) {
     const basePool: GameSymbol[] = ["💎", "🧧", "🪙", "🍊", "🧨"];
     const baseSym = basePool[Math.floor(Math.random() * basePool.length)];
-    const grid: GameSymbol[] = Array.from({ length: 9 }, () => (Math.random() < 0.35 ? "🐯" : baseSym));
+    const grid: GameSymbol[] = Array.from({ length: 9 }, () => (Math.random() < 0.25 ? "🐯" : baseSym));
     const winningLines = PAYLINES.map((line) => evaluateLine(grid, line, betCents)).filter(
       (x): x is WinningLineResult => x !== null
     );
     const linesSum = winningLines.reduce((acc, item) => acc + item.payoutCents, 0);
-    const fullGridBonusCents = betCents * 10;
+    const fullGridBonusCents = betCents * 5;
     const payoutCents = linesSum + fullGridBonusCents;
     const labels = winningLines.map((l) => l.label + " (" + l.symbol + ")").join(" + ");
     return {
@@ -99,14 +182,14 @@ function generateGrid(betCents: number) {
       winningLines,
       payoutCents,
       fullGridBonusCents,
-      outcome: "Grade Completa 10x + " + labels,
+      outcome: labels ? "Grade Completa 5x + " + labels : "Grade Completa " + baseSym + " (5x)",
     };
   }
 
-  if (roll < 0.48) {
+  if (roll < effectiveWinChance) {
     const chosenLine = PAYLINES[Math.floor(Math.random() * PAYLINES.length)];
     const lineSymbol = randomWeightedSymbol();
-    const grid: GameSymbol[] = Array.from({ length: 9 }, () => "🧨");
+    const grid = generateNonWinningGrid();
     for (const idx of chosenLine.indices) {
       grid[idx] = lineSymbol;
     }
@@ -120,28 +203,7 @@ function generateGrid(betCents: number) {
     }
   }
 
-  const grid: GameSymbol[] = Array.from({ length: 9 }, () => randomWeightedSymbol());
-  const winningLines = PAYLINES.map((line) => evaluateLine(grid, line, betCents)).filter(
-    (x): x is WinningLineResult => x !== null
-  );
-  if (winningLines.length > 0) {
-    const payoutCents = winningLines.reduce((acc, item) => acc + item.payoutCents, 0);
-    const outcome = winningLines.map((l) => l.label + " " + l.symbol + " (" + l.multiplier + "x)").join(" | ");
-    return { grid, winningLines, payoutCents, fullGridBonusCents: 0, outcome };
-  }
-
-  const fullMatch = hasFullGridMatch(grid);
-  if (fullMatch) {
-    const fullGridBonusCents = betCents * 10;
-    return {
-      grid,
-      winningLines: [],
-      payoutCents: fullGridBonusCents,
-      fullGridBonusCents,
-      outcome: "Grade Completa " + fullMatch + " (10x)",
-    };
-  }
-
+  const grid = generateNonWinningGrid();
   return { grid, winningLines: [], payoutCents: 0, fullGridBonusCents: 0, outcome: "Sem sequencia" };
 }
 
@@ -158,7 +220,7 @@ export async function POST(req: Request) {
     }
     await ensureAuthTables();
     const player = await getOrCreatePlayer(username);
-    const generated = generateGrid(betCents);
+    const generated = await generateGrid(betCents, player.id);
     const spinResult = await registerSpin({
       playerId: player.id,
       betCents,
