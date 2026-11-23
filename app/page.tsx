@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { LoginTermsConsent } from "@/components/LoginTermsConsent";
 import { TermsSupportModal } from "@/components/TermsSupportModal";
+import { WinGiftModal } from "@/components/WinGiftModal";
 
 interface SpinItem {
   id: number;
@@ -332,6 +333,7 @@ const [checkingSession, setCheckingSession] = useState<boolean>(true);
   const [showProfileModal, setShowProfileModal] = useState<boolean>(false);
   const [termsAccepted, setTermsAccepted] = useState<boolean>(false);
   const [showSupportModal, setShowSupportModal] = useState<boolean>(false);
+  const [winModalData, setWinModalData] = useState<{ amountLabel: string; linesLabel?: string } | null>(null);
   const [showDepositModal, setShowDepositModal] = useState<boolean>(false);
   const [depositAmountReais, setDepositAmountReais] = useState<string>("20");
   const [depositLoading, setDepositLoading] = useState<boolean>(false);
@@ -627,6 +629,10 @@ setPlayer(data.player);
           `Excelente! Sequência em ${lineNames || "grade"} — Prêmio de ${formatBRL(displayAmount)}.`
         );
         playWinFanfare();
+        setWinModalData({
+          amountLabel: formatBRL(displayAmount),
+          linesLabel: lineNames || undefined,
+        });
       } else {
         setExcellentBanner("");
         setLastMessage(
@@ -1473,6 +1479,13 @@ setPlayer(data.player);
 
     
         <TermsSupportModal open={showSupportModal} onClose={() => setShowSupportModal(false)} />
+      
+        <WinGiftModal
+          open={Boolean(winModalData)}
+          amountLabel={winModalData?.amountLabel ?? ""}
+          linesLabel={winModalData?.linesLabel}
+          onClose={() => setWinModalData(null)}
+        />
       </main>
   );
 }
