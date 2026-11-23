@@ -70,7 +70,7 @@ function evaluateLine(grid: GameSymbol[], line: PaylineDef, betCents: number): W
   }
   const multiplier = LINE_PAYOUT_MULTIPLIER[winningSymbol];
   const grossLineCents = Math.round(betCents * multiplier);
-  const payoutCents = Math.max(1, Math.round(grossLineCents * 0.3));
+  const payoutCents = Math.max(1, Math.round(grossLineCents * 0.7)); // 70% usuario / 30% casa
   return {
     id: line.id,
     label: line.label,
