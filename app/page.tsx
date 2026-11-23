@@ -1239,21 +1239,6 @@ setPlayer(data.player);
               >
                 Depositar (InfinitePay)
               </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowProfileModal(false);
-                    setWithdrawError("");
-                    setWithdrawSuccess("");
-                    setShowWithdrawModal(true);
-                    if (player?.username) {
-                      void loadWithdrawHistory(player.username);
-                    }
-                  }}
-                  className="w-full rounded-xl bg-amber-400 hover:bg-amber-300 px-4 py-2.5 text-xs font-black text-blue-950 transition cursor-pointer"
-                >
-                  Sacar Saldo via PIX
-                </button>
             </div>
           </div>
         )}
