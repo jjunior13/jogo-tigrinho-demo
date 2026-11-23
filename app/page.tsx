@@ -1,6 +1,8 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { LoginTermsConsent } from "@/components/LoginTermsConsent";
+import { TermsSupportModal } from "@/components/TermsSupportModal";
 
 interface SpinItem {
   id: number;
@@ -328,6 +330,8 @@ const [checkingSession, setCheckingSession] = useState<boolean>(true);
   const [spinning, setSpinning] = useState<boolean>(false);
   const [muted, setMuted] = useState<boolean>(false);
   const [showProfileModal, setShowProfileModal] = useState<boolean>(false);
+  const [termsAccepted, setTermsAccepted] = useState<boolean>(false);
+  const [showSupportModal, setShowSupportModal] = useState<boolean>(false);
   const [showDepositModal, setShowDepositModal] = useState<boolean>(false);
   const [depositAmountReais, setDepositAmountReais] = useState<string>("20");
   const [depositLoading, setDepositLoading] = useState<boolean>(false);
@@ -455,6 +459,10 @@ setPlayer(data.player);
 
   async function handleLoginSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!termsAccepted) {
+      setAuthError("Aceite os Termos de Uso e a fase inicial de arrecadação para continuar.");
+      return;
+    }
     setAuthError("");
     setAuthNotice("");
     setAuthLoading(true);
@@ -480,6 +488,10 @@ setPlayer(data.player);
 
     async function handleRegisterSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!termsAccepted) {
+      setAuthError("Aceite os Termos de Uso e a fase inicial de arrecadação para continuar.");
+      return;
+    }
     setAuthError("");
     setAuthNotice("");
     setAuthLoading(true);
@@ -805,6 +817,14 @@ setPlayer(data.player);
     );
   }
 
+  if (player && typeof window !== "undefined") {
+    const seenWelcome = window.localStorage.getItem("tigrinho_support_welcome_seen_v1");
+    if (!seenWelcome) {
+      window.localStorage.setItem("tigrinho_support_welcome_seen_v1", "1");
+      queueMicrotask(() => setShowSupportModal(true));
+    }
+  }
+
   if (!player) {
     return (
       <main className="min-h-screen bg-gradient-to-b from-emerald-950 via-green-950 to-blue-950 text-amber-50 flex flex-col items-center justify-center p-6 overflow-x-hidden max-w-full">
@@ -898,6 +918,8 @@ setPlayer(data.player);
               >
                 {authLoading ? "Entrando..." : "Entrar no Tigrinho do Brasil"}
               </button>
+            
+              <LoginTermsConsent accepted={termsAccepted} onAcceptedChange={setTermsAccepted} />
             </form>
           ) : (
             <form onSubmit={handleRegisterSubmit} className="space-y-3">
@@ -1487,6 +1509,8 @@ setPlayer(data.player);
         </div>
       )}
 
-    </main>
+    
+        <TermsSupportModal open={showSupportModal} onClose={() => setShowSupportModal(false)} />
+      </main>
   );
 }
