@@ -335,7 +335,7 @@ const [checkingSession, setCheckingSession] = useState<boolean>(true);
   const [showSupportModal, setShowSupportModal] = useState<boolean>(false);
   const [winModalData, setWinModalData] = useState<{ amountLabel: string; linesLabel?: string } | null>(null);
   const [showDepositModal, setShowDepositModal] = useState<boolean>(false);
-  const [depositAmountReais, setDepositAmountReais] = useState<string>("20");
+  const [depositAmountReais, setDepositAmountReais] = useState<string>("1");
   const [depositLoading, setDepositLoading] = useState<boolean>(false);
   const [depositError, setDepositError] = useState<string>("");
   const [pixReceipt, setPixReceipt] = useState<{
@@ -1275,7 +1275,7 @@ setPlayer(data.player);
               </div>
 
               <div className="grid grid-cols-4 gap-2">
-                {["10", "20", "50", "100"].map((preset) => (
+                {["1", "5", "10", "20"].map((preset) => (
                   <button
                     key={preset}
                     type="button"
