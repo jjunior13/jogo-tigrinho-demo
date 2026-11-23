@@ -833,7 +833,7 @@ setPlayer(data.player);
 
   if (!player) {
     return (
-      <main className="min-h-screen bg-gradient-to-b from-emerald-950 via-green-950 to-blue-950 text-amber-50 flex flex-col items-center justify-center p-6 overflow-x-hidden max-w-full">
+      <main className="min-h-screen w-full bg-gradient-to-b from-emerald-950 via-green-950 to-blue-950 text-amber-50 flex flex-col items-center justify-center px-3 py-4 sm:p-6 overflow-x-hidden max-w-full">
         <div className="w-full max-w-md rounded-2xl border-2 border-yellow-400/60 bg-emerald-950/95 p-6 shadow-2xl shadow-blue-950/80 space-y-5">
           <div className="text-center space-y-1 border-b border-yellow-400/25 pb-4">
             <h1 className="text-2xl font-extrabold tracking-wide text-yellow-300">
@@ -1005,17 +1005,25 @@ setPlayer(data.player);
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-emerald-950 via-green-950 to-blue-950 text-amber-50 flex flex-col items-center justify-center p-6 overflow-x-hidden max-w-full">
-      <div className="w-full max-w-md rounded-2xl border-2 border-yellow-400/60 bg-emerald-950/90 p-6 shadow-2xl shadow-blue-950/70 space-y-5">
-        <div className="flex items-center justify-between border-b border-yellow-400/25 pb-4">
-          <div>
-            <h1 className="text-xl font-extrabold tracking-wide text-yellow-300">
+      <div className="w-full max-w-md min-w-0 rounded-2xl border-2 border-yellow-400/60 bg-emerald-950/90 p-4 sm:p-6 shadow-2xl shadow-blue-950/70 space-y-4 overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-yellow-400/25 pb-3.5 min-w-0">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-lg sm:text-xl font-extrabold tracking-wide text-yellow-300 truncate">
               🇧🇷 Tigrinho do Brasil
             </h1>
-            <p className="text-xs text-emerald-200/80">
+            <p className="text-xs text-emerald-200/80 truncate">
               Jogador: {player.full_name || player.username}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="shrink-0 rounded-xl border border-yellow-300/50 bg-blue-950/90 px-3 py-1.5 text-right shadow">
+            <span className="block text-[10px] font-bold uppercase tracking-wider text-emerald-200/80">
+              Fundos
+            </span>
+            <strong className="text-sm sm:text-base font-mono font-black text-yellow-300 tabular-nums whitespace-nowrap">
+              {formatBRL(player.balance_cents)}
+            </strong>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 min-w-0">
             <button
               type="button"
               onClick={() => {
