@@ -177,7 +177,7 @@ async function generateGrid(betCents: number, playerId: number) {
       (x): x is WinningLineResult => x !== null
     );
     const linesSum = winningLines.reduce((acc, item) => acc + item.payoutCents, 0);
-    const fullGridBonusCents = Math.round(betCents * 5 * 0.3);
+    const fullGridBonusCents = Math.round(betCents * 5 * 0.7); // 70% usuario / 30% casa
     const payoutCents = linesSum + fullGridBonusCents;
     const labels = winningLines.map((l) => l.label + " (" + l.symbol + ")").join(" + ");
     return {
